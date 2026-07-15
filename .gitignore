@@ -1,0 +1,14 @@
+# environment
+.venv/
+
+# generated outputs
+attack_logs_injected/
+results/
+
+# notebook checkpoints
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
+# python caches
+__pycache__/
+*.pyc

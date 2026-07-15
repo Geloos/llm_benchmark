@@ -1,0 +1,452 @@
+172.28.128.10 - - [10/Jul/2026:02:08:55 +0000] "GET /?probe=0 HTTP/1.1" 200 844 "-" "this_is_the_injection"
+type=SYSCALL msg=audit(1783649339.801:2452): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3946 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649339.801:2452): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649339.801:2452):  cwd="/"
+type=PATH msg=audit(1783649339.801:2452): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649339.801:2452): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Jul 10 02:09:05 metasploitable3-ub1404 sshd[3946]: Invalid user this_is_the_injection from 172.28.128.10
+Jul 10 02:09:05 metasploitable3-ub1404 sshd[3946]: input_userauth_request: invalid user this_is_the_injection [preauth]
+Jul 10 02:09:05 metasploitable3-ub1404 sshd[3946]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10 
+type=USER_LOGIN msg=audit(1783649345.845:2453): pid=3946 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28756E6B6E6F776E207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1783649345.845:2454): pid=3946 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+Jul 10 02:09:07 metasploitable3-ub1404 sshd[3946]: Failed password for invalid user this_is_the_injection from 172.28.128.10 port 54598 ssh2
+type=USER_AUTH msg=audit(1783649347.349:2455): pid=3946 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="this_is_the_injection" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649347.349:2456): pid=3946 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=SYSCALL msg=audit(1783649389.269:2472): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3954 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649389.269:2472): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649389.269:2472):  cwd="/"
+type=PATH msg=audit(1783649389.269:2472): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649389.269:2472): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_ERR msg=audit(1783649395.349:2473): pid=3954 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:bad_ident acct="?" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=SYSCALL msg=audit(1783649395.573:2474): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3956 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.573:2474): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.573:2474):  cwd="/"
+type=PATH msg=audit(1783649395.573:2474): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.573:2474): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.577:2475): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3957 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.577:2475): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.577:2475):  cwd="/"
+type=PATH msg=audit(1783649395.577:2475): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.577:2475): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.577:2476): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3959 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.577:2476): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.577:2476):  cwd="/"
+type=PATH msg=audit(1783649395.577:2476): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.577:2476): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.577:2477): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3958 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.577:2477): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.577:2477):  cwd="/"
+type=PATH msg=audit(1783649395.577:2477): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.577:2477): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.585:2478): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3963 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.585:2478): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.585:2478):  cwd="/"
+type=PATH msg=audit(1783649395.585:2478): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.585:2478): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.589:2479): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3962 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.589:2479): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.589:2479):  cwd="/"
+type=PATH msg=audit(1783649395.589:2479): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.589:2479): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.593:2480): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3964 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.593:2480): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.593:2480):  cwd="/"
+type=PATH msg=audit(1783649395.593:2480): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.593:2480): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649395.597:2481): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3961 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649395.597:2481): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649395.597:2481):  cwd="/"
+type=PATH msg=audit(1783649395.597:2481): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649395.597:2481): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3961]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3962]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3964]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3959]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3958]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3963]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3957]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:01 metasploitable3-ub1404 sshd[3956]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10  user=vagrant
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3964]: Failed password for vagrant from 172.28.128.10 port 45796 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3961]: Failed password for vagrant from 172.28.128.10 port 45774 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3962]: Failed password for vagrant from 172.28.128.10 port 45788 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3958]: Failed password for vagrant from 172.28.128.10 port 45752 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3959]: Failed password for vagrant from 172.28.128.10 port 45754 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3963]: Failed password for vagrant from 172.28.128.10 port 45790 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3957]: Failed password for vagrant from 172.28.128.10 port 45736 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3956]: Failed password for vagrant from 172.28.128.10 port 45734 ssh2
+Jul 10 02:10:03 metasploitable3-ub1404 sshd[3961]: Accepted password for vagrant from 172.28.128.10 port 45774 ssh2
+type=USER_AUTH msg=audit(1783649403.181:2482): pid=3961 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_AUTH msg=audit(1783649403.181:2483): pid=3964 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.181:2484): pid=3961 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.185:2485): pid=3962 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.185:2486): pid=3962 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1783649403.185:2487): pid=3964 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.189:2488): pid=3958 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.189:2489): pid=3958 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.189:2490): pid=3959 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.189:2491): pid=3959 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.189:2492): pid=3963 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.189:2493): pid=3963 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.189:2494): pid=3957 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.189:2495): pid=3957 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_AUTH msg=audit(1783649403.189:2496): pid=3961 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=USER_AUTH msg=audit(1783649403.193:2497): pid=3956 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1783649403.193:2498): pid=3956 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct="vagrant" exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_ACCT msg=audit(1783649403.193:2499): pid=3961 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:accounting acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_ACQ msg=audit(1783649403.193:2500): pid=3961 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=LOGIN msg=audit(1783649403.197:2501): pid=3961 uid=0 old auid=4294967295 new auid=900 old ses=4294967295 new ses=15 res=1
+type=SYSCALL msg=audit(1783649403.205:2502): arch=c000003e syscall=59 success=yes exit=0 a0=7ff19ce46543 a1=7fff7f185dc0 a2=7ff19fc470c0 a3=8 items=2 ppid=3961 pid=3972 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649403.205:2502): argc=3 a0="sh" a1="-c" a2=2F7573722F62696E2F656E76202D6920504154483D2F7573722F6C6F63616C2F7362696E3A2F7573722F6C6F63616C2F62696E3A2F7573722F7362696E3A2F7573722F62696E3A2F7362696E3A2F62696E2072756E2D7061727473202D2D6C7362737973696E6974202F6574632F7570646174652D6D6F74642E64203E202F72756E2F6D6F74642E64796E616D69632E6E6577
+type=CWD msg=audit(1783649403.205:2502):  cwd="/"
+type=PATH msg=audit(1783649403.205:2502): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.205:2502): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.209:2503): arch=c000003e syscall=59 success=yes exit=0 a0=7f4c55616c40 a1=7f4c572aa2a8 a2=7f4c572aa308 a3=7f4c553e5a10 items=2 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=EXECVE msg=audit(1783649403.209:2503): argc=6 a0="/usr/bin/env" a1="-i" a2="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" a3="run-parts" a4="--lsbsysinit" a5="/etc/update-motd.d"
+type=CWD msg=audit(1783649403.209:2503):  cwd="/"
+type=PATH msg=audit(1783649403.209:2503): item=0 name="/usr/bin/env" inode=2113121 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.209:2503): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.209:2504): arch=c000003e syscall=59 success=no exit=-2 a0=7fffd3ca493d a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=1 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649403.209:2504):  cwd="/"
+type=PATH msg=audit(1783649403.209:2504): item=0 name="/usr/local/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649403.209:2505): arch=c000003e syscall=59 success=no exit=-2 a0=7fffd3ca493e a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=1 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649403.209:2505):  cwd="/"
+type=PATH msg=audit(1783649403.209:2505): item=0 name="/usr/local/bin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649403.209:2506): arch=c000003e syscall=59 success=no exit=-2 a0=7fffd3ca4943 a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=1 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649403.209:2506):  cwd="/"
+type=PATH msg=audit(1783649403.209:2506): item=0 name="/usr/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649403.209:2507): arch=c000003e syscall=59 success=no exit=-2 a0=7fffd3ca4944 a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=1 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649403.209:2507):  cwd="/"
+type=PATH msg=audit(1783649403.209:2507): item=0 name="/usr/bin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649403.209:2508): arch=c000003e syscall=59 success=no exit=-2 a0=7fffd3ca4947 a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=1 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649403.209:2508):  cwd="/"
+type=PATH msg=audit(1783649403.209:2508): item=0 name="/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649403.209:2509): arch=c000003e syscall=59 success=yes exit=0 a0=7fffd3ca4948 a1=7fffd3ca4b40 a2=1dee060 a3=7fffd3ca47c0 items=2 ppid=3972 pid=3973 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="run-parts" exe="/bin/run-parts" key="exec_watch"
+type=EXECVE msg=audit(1783649403.209:2509): argc=3 a0="run-parts" a1="--lsbsysinit" a2="/etc/update-motd.d"
+type=CWD msg=audit(1783649403.209:2509):  cwd="/"
+type=PATH msg=audit(1783649403.209:2509): item=0 name="/bin/run-parts" inode=262226 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.209:2509): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.213:2510): arch=c000003e syscall=59 success=yes exit=0 a0=c25c80 a1=c22010 a2=7fff45dce6b8 a3=7fff45dcd090 items=3 ppid=3973 pid=3974 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="00-header" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649403.213:2510): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/00-header"
+type=CWD msg=audit(1783649403.213:2510):  cwd="/"
+type=PATH msg=audit(1783649403.213:2510): item=0 name="/etc/update-motd.d/00-header" inode=1573397 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.213:2510): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.213:2510): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.217:2511): arch=c000003e syscall=59 success=yes exit=0 a0=7ffa1880b4c0 a1=7ffa1880b490 a2=7ffa1880b4a8 a3=7ffa16ff9b70 items=2 ppid=3974 pid=3975 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649403.217:2511): argc=2 a0="uname" a1="-o"
+type=CWD msg=audit(1783649403.217:2511):  cwd="/"
+type=PATH msg=audit(1783649403.217:2511): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.217:2511): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.217:2512): arch=c000003e syscall=59 success=yes exit=0 a0=7ffa1880b4e0 a1=7ffa1880b4b0 a2=7ffa1880b4c8 a3=7ffa16ff9810 items=2 ppid=3974 pid=3976 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649403.217:2512): argc=2 a0="uname" a1="-r"
+type=CWD msg=audit(1783649403.217:2512):  cwd="/"
+type=PATH msg=audit(1783649403.217:2512): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.217:2512): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.221:2513): arch=c000003e syscall=59 success=yes exit=0 a0=7f6c8546f050 a1=7f6c854782d0 a2=7f6c8546f090 a3=7f6c81d2ffe0 items=2 ppid=2279 pid=3977 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1783649403.221:2513): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1783649403.221:2513):  cwd="/"
+type=PATH msg=audit(1783649403.221:2513): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.221:2513): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.221:2514): arch=c000003e syscall=59 success=yes exit=0 a0=7ffa1880b5d8 a1=7ffa1880b4d8 a2=7ffa1880b4f0 a3=7ffa16ff94b0 items=2 ppid=3974 pid=3978 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649403.221:2514): argc=2 a0="uname" a1="-m"
+type=CWD msg=audit(1783649403.221:2514):  cwd="/"
+type=PATH msg=audit(1783649403.221:2514): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.221:2514): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.225:2515): arch=c000003e syscall=59 success=yes exit=0 a0=c25c80 a1=c22010 a2=7fff45dce6b8 a3=7fff45dcd090 items=3 ppid=3973 pid=3979 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="10-help-text" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649403.225:2515): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/10-help-text"
+type=CWD msg=audit(1783649403.225:2515):  cwd="/"
+type=PATH msg=audit(1783649403.225:2515): item=0 name="/etc/update-motd.d/10-help-text" inode=1573398 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.225:2515): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.225:2515): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.233:2516): arch=c000003e syscall=59 success=yes exit=0 a0=7fc0c443b3b0 a1=7fc0c443b378 a2=7fc0c443b398 a3=7fc0c2f26a10 items=2 ppid=3979 pid=3982 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="grep" exe="/bin/grep" key="exec_watch"
+type=EXECVE msg=audit(1783649403.233:2516): argc=3 a0="grep" a1="-qs" a2="\-server"
+type=CWD msg=audit(1783649403.233:2516):  cwd="/"
+type=PATH msg=audit(1783649403.233:2516): item=0 name="/bin/grep" inode=262179 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.233:2516): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.233:2517): arch=c000003e syscall=59 success=yes exit=0 a0=7fc0c443b388 a1=7fc0c443b358 a2=7fc0c443b370 a3=7fc0c2f26a10 items=2 ppid=3979 pid=3981 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649403.233:2517): argc=2 a0="uname" a1="-r"
+type=CWD msg=audit(1783649403.233:2517):  cwd="/"
+type=PATH msg=audit(1783649403.233:2517): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.233:2517): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.233:2518): arch=c000003e syscall=59 success=yes exit=0 a0=c25c80 a1=c22010 a2=7fff45dce6b8 a3=7fff45dcd090 items=3 ppid=3973 pid=3983 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="91-release-upgr" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649403.233:2518): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/91-release-upgrade"
+type=CWD msg=audit(1783649403.233:2518):  cwd="/"
+type=PATH msg=audit(1783649403.233:2518): item=0 name="/etc/update-motd.d/91-release-upgrade" inode=1573678 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.233:2518): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.233:2518): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.233:2519): arch=c000003e syscall=59 success=yes exit=0 a0=7f1691c74270 a1=7f1691c74238 a2=7f1691c74258 a3=7f169192ba10 items=2 ppid=3984 pid=3986 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="cut" exe="/usr/bin/cut" key="exec_watch"
+type=EXECVE msg=audit(1783649403.233:2519): argc=3 a0="cut" a1=2D6420 a2="-f4"
+type=CWD msg=audit(1783649403.233:2519):  cwd="/"
+type=PATH msg=audit(1783649403.233:2519): item=0 name="/usr/bin/cut" inode=2113130 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.233:2519): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.237:2520): arch=c000003e syscall=59 success=yes exit=0 a0=7f1691c74258 a1=7f1691c74228 a2=7f1691c74240 a3=7f169192ba10 items=3 ppid=3984 pid=3985 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="lsb_release" exe="/usr/bin/python3.4" key="exec_watch"
+type=EXECVE msg=audit(1783649403.237:2520): argc=4 a0="/usr/bin/python3" a1="-Es" a2="/usr/bin/lsb_release" a3="-sd"
+type=CWD msg=audit(1783649403.237:2520):  cwd="/"
+type=PATH msg=audit(1783649403.237:2520): item=0 name="/usr/bin/lsb_release" inode=2097308 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.237:2520): item=1 name=(null) inode=2098176 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.237:2520): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.277:2521): arch=c000003e syscall=59 success=yes exit=0 a0=7f1691c740b8 a1=7f1691c74110 a2=7f1691c74120 a3=fffffffffffffc42 items=3 ppid=3973 pid=3983 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="release-upgrade" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649403.277:2521): argc=3 a0="/bin/sh" a1="-e" a2="/usr/lib/ubuntu-release-upgrader/release-upgrade-motd"
+type=CWD msg=audit(1783649403.277:2521):  cwd="/"
+type=PATH msg=audit(1783649403.277:2521): item=0 name="/usr/lib/ubuntu-release-upgrader/release-upgrade-motd" inode=135267 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.277:2521): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.277:2521): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.281:2522): arch=c000003e syscall=59 success=yes exit=0 a0=7fb8162c1ae0 a1=7fb8162c1ab0 a2=7fb8162c1ac8 a3=7fb814a82b70 items=2 ppid=3983 pid=3987 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="date" exe="/bin/date" key="exec_watch"
+type=EXECVE msg=audit(1783649403.281:2522): argc=2 a0="date" a1="+%s"
+type=CWD msg=audit(1783649403.281:2522):  cwd="/"
+type=PATH msg=audit(1783649403.281:2522): item=0 name="/bin/date" inode=272818 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.281:2522): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.281:2523): arch=c000003e syscall=59 success=yes exit=0 a0=7fb8162c1b80 a1=7fb8162c1b40 a2=7fb8162c1b68 a3=2 items=2 ppid=3983 pid=3988 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="stat" exe="/usr/bin/stat" key="exec_watch"
+type=EXECVE msg=audit(1783649403.281:2523): argc=4 a0="stat" a1="-c" a2="%Y" a3="/var/lib/ubuntu-release-upgrader/release-upgrade-available"
+type=CWD msg=audit(1783649403.281:2523):  cwd="/"
+type=PATH msg=audit(1783649403.281:2523): item=0 name="/usr/bin/stat" inode=2113119 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.281:2523): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.285:2524): arch=c000003e syscall=59 success=yes exit=0 a0=7fb8162c1b30 a1=7fb8162c1af0 a2=7fb8162c1b18 a3=fffffffffffffa92 items=2 ppid=3983 pid=3989 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="expr" exe="/usr/bin/expr" key="exec_watch"
+type=EXECVE msg=audit(1783649403.285:2524): argc=4 a0="expr" a1="1783600357" a2="+" a3="86400"
+type=CWD msg=audit(1783649403.285:2524):  cwd="/"
+type=PATH msg=audit(1783649403.285:2524): item=0 name="/usr/bin/expr" inode=2100957 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.285:2524): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649403.289:2525): arch=c000003e syscall=59 success=yes exit=0 a0=7fb8162c1b08 a1=7fb8162c1ad8 a2=7fb8162c1af0 a3=7fb814f1aa10 items=2 ppid=3983 pid=3990 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=15 tty=(none) comm="cat" exe="/bin/cat" key="exec_watch"
+type=EXECVE msg=audit(1783649403.289:2525): argc=2 a0="cat" a1="/var/lib/ubuntu-release-upgrader/release-upgrade-available"
+type=CWD msg=audit(1783649403.289:2525):  cwd="/"
+type=PATH msg=audit(1783649403.289:2525): item=0 name="/bin/cat" inode=272814 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649403.289:2525): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_START msg=audit(1783649403.293:2526): pid=3961 uid=0 auid=900 ses=15 msg='op=PAM:session_open acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_ACQ msg=audit(1783649403.293:2527): pid=3991 uid=0 auid=900 ses=15 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=USER_END msg=audit(1783649403.297:2528): pid=3961 uid=0 auid=900 ses=15 msg='op=PAM:session_close acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_DISP msg=audit(1783649403.297:2529): pid=3961 uid=0 auid=900 ses=15 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+Jul 10 02:10:09 metasploitable3-ub1404 sshd[3977]: Accepted password for vagrant from 172.28.128.10 port 46496 ssh2
+type=USER_AUTH msg=audit(1783649409.245:2530): pid=3977 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=USER_ACCT msg=audit(1783649409.253:2531): pid=3977 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:accounting acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_ACQ msg=audit(1783649409.253:2532): pid=3977 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=LOGIN msg=audit(1783649409.253:2533): pid=3977 uid=0 old auid=4294967295 new auid=900 old ses=4294967295 new ses=16 res=1
+type=SYSCALL msg=audit(1783649409.261:2534): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb598ef543 a1=7fff965ecb20 a2=7fdb5c2b60c0 a3=8 items=2 ppid=3977 pid=3992 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.261:2534): argc=3 a0="sh" a1="-c" a2=2F7573722F62696E2F656E76202D6920504154483D2F7573722F6C6F63616C2F7362696E3A2F7573722F6C6F63616C2F62696E3A2F7573722F7362696E3A2F7573722F62696E3A2F7362696E3A2F62696E2072756E2D7061727473202D2D6C7362737973696E6974202F6574632F7570646174652D6D6F74642E64203E202F72756E2F6D6F74642E64796E616D69632E6E6577
+type=CWD msg=audit(1783649409.261:2534):  cwd="/"
+type=PATH msg=audit(1783649409.261:2534): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.261:2534): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.261:2535): arch=c000003e syscall=59 success=yes exit=0 a0=7ffc172ddc40 a1=7ffc188032a8 a2=7ffc18803308 a3=7ffc170aca10 items=2 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=EXECVE msg=audit(1783649409.261:2535): argc=6 a0="/usr/bin/env" a1="-i" a2="PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" a3="run-parts" a4="--lsbsysinit" a5="/etc/update-motd.d"
+type=CWD msg=audit(1783649409.261:2535):  cwd="/"
+type=PATH msg=audit(1783649409.261:2535): item=0 name="/usr/bin/env" inode=2113121 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.261:2535): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.261:2536): arch=c000003e syscall=59 success=no exit=-2 a0=7fff7850c16d a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=1 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649409.261:2536):  cwd="/"
+type=PATH msg=audit(1783649409.261:2536): item=0 name="/usr/local/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649409.261:2537): arch=c000003e syscall=59 success=no exit=-2 a0=7fff7850c16e a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=1 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649409.261:2537):  cwd="/"
+type=PATH msg=audit(1783649409.261:2537): item=0 name="/usr/local/bin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649409.261:2538): arch=c000003e syscall=59 success=no exit=-2 a0=7fff7850c173 a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=1 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649409.261:2538):  cwd="/"
+type=PATH msg=audit(1783649409.261:2538): item=0 name="/usr/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649409.261:2539): arch=c000003e syscall=59 success=no exit=-2 a0=7fff7850c174 a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=1 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649409.261:2539):  cwd="/"
+type=PATH msg=audit(1783649409.261:2539): item=0 name="/usr/bin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649409.261:2540): arch=c000003e syscall=59 success=no exit=-2 a0=7fff7850c177 a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=1 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="env" exe="/usr/bin/env" key="exec_watch"
+type=CWD msg=audit(1783649409.261:2540):  cwd="/"
+type=PATH msg=audit(1783649409.261:2540): item=0 name="/sbin/run-parts" nametype=UNKNOWN
+type=SYSCALL msg=audit(1783649409.261:2541): arch=c000003e syscall=59 success=yes exit=0 a0=7fff7850c178 a1=7fff7850c370 a2=881060 a3=7fff7850bff0 items=2 ppid=3992 pid=3993 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="run-parts" exe="/bin/run-parts" key="exec_watch"
+type=EXECVE msg=audit(1783649409.261:2541): argc=3 a0="run-parts" a1="--lsbsysinit" a2="/etc/update-motd.d"
+type=CWD msg=audit(1783649409.261:2541):  cwd="/"
+type=PATH msg=audit(1783649409.261:2541): item=0 name="/bin/run-parts" inode=262226 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.261:2541): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.265:2542): arch=c000003e syscall=59 success=yes exit=0 a0=2067c80 a1=2064010 a2=7fff1e12efa8 a3=7fff1e12d980 items=3 ppid=3993 pid=3994 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="00-header" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.265:2542): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/00-header"
+type=CWD msg=audit(1783649409.265:2542):  cwd="/"
+type=PATH msg=audit(1783649409.265:2542): item=0 name="/etc/update-motd.d/00-header" inode=1573397 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.265:2542): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.265:2542): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.269:2543): arch=c000003e syscall=59 success=yes exit=0 a0=7f36a66214c0 a1=7f36a6621490 a2=7f36a66214a8 a3=7f36a53f4b70 items=2 ppid=3994 pid=3995 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649409.269:2543): argc=2 a0="uname" a1="-o"
+type=CWD msg=audit(1783649409.269:2543):  cwd="/"
+type=PATH msg=audit(1783649409.269:2543): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.269:2543): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.269:2544): arch=c000003e syscall=59 success=yes exit=0 a0=7f36a66214e0 a1=7f36a66214b0 a2=7f36a66214c8 a3=7f36a53f4810 items=2 ppid=3994 pid=3996 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649409.269:2544): argc=2 a0="uname" a1="-r"
+type=CWD msg=audit(1783649409.269:2544):  cwd="/"
+type=PATH msg=audit(1783649409.269:2544): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.269:2544): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.273:2545): arch=c000003e syscall=59 success=yes exit=0 a0=7f36a66215d8 a1=7f36a66214d8 a2=7f36a66214f0 a3=7f36a53f44b0 items=2 ppid=3994 pid=3997 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649409.273:2545): argc=2 a0="uname" a1="-m"
+type=CWD msg=audit(1783649409.273:2545):  cwd="/"
+type=PATH msg=audit(1783649409.273:2545): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.273:2545): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.277:2546): arch=c000003e syscall=59 success=yes exit=0 a0=2067c80 a1=2064010 a2=7fff1e12efa8 a3=7fff1e12d980 items=3 ppid=3993 pid=3998 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="10-help-text" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.277:2546): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/10-help-text"
+type=CWD msg=audit(1783649409.277:2546):  cwd="/"
+type=PATH msg=audit(1783649409.277:2546): item=0 name="/etc/update-motd.d/10-help-text" inode=1573398 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.277:2546): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.277:2546): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.277:2547): arch=c000003e syscall=59 success=yes exit=0 a0=7f2b10db6388 a1=7f2b10db6358 a2=7f2b10db6370 a3=7f2b0f80aa10 items=2 ppid=3998 pid=3999 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649409.277:2547): argc=2 a0="uname" a1="-r"
+type=CWD msg=audit(1783649409.277:2547):  cwd="/"
+type=PATH msg=audit(1783649409.277:2547): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.277:2547): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.277:2548): arch=c000003e syscall=59 success=yes exit=0 a0=7f2b10db63b0 a1=7f2b10db6378 a2=7f2b10db6398 a3=7f2b0f80aa10 items=2 ppid=3998 pid=4000 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="grep" exe="/bin/grep" key="exec_watch"
+type=EXECVE msg=audit(1783649409.277:2548): argc=3 a0="grep" a1="-qs" a2="\-server"
+type=CWD msg=audit(1783649409.277:2548):  cwd="/"
+type=PATH msg=audit(1783649409.277:2548): item=0 name="/bin/grep" inode=262179 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.277:2548): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.281:2549): arch=c000003e syscall=59 success=yes exit=0 a0=2067c80 a1=2064010 a2=7fff1e12efa8 a3=7fff1e12d980 items=3 ppid=3993 pid=4001 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="91-release-upgr" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.281:2549): argc=2 a0="/bin/sh" a1="/etc/update-motd.d/91-release-upgrade"
+type=CWD msg=audit(1783649409.281:2549):  cwd="/"
+type=PATH msg=audit(1783649409.281:2549): item=0 name="/etc/update-motd.d/91-release-upgrade" inode=1573678 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.281:2549): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.281:2549): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.285:2550): arch=c000003e syscall=59 success=yes exit=0 a0=7fd487483258 a1=7fd487483228 a2=7fd487483240 a3=7fd4869cea10 items=3 ppid=4002 pid=4003 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="lsb_release" exe="/usr/bin/python3.4" key="exec_watch"
+type=SYSCALL msg=audit(1783649409.285:2551): arch=c000003e syscall=59 success=yes exit=0 a0=7fd487483270 a1=7fd487483238 a2=7fd487483258 a3=7fd4869cea10 items=2 ppid=4002 pid=4004 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="cut" exe="/usr/bin/cut" key="exec_watch"
+type=EXECVE msg=audit(1783649409.285:2551): argc=3 a0="cut" a1=2D6420 a2="-f4"
+type=CWD msg=audit(1783649409.285:2551):  cwd="/"
+type=PATH msg=audit(1783649409.285:2551): item=0 name="/usr/bin/cut" inode=2113130 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.285:2551): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=EXECVE msg=audit(1783649409.285:2550): argc=4 a0="/usr/bin/python3" a1="-Es" a2="/usr/bin/lsb_release" a3="-sd"
+type=CWD msg=audit(1783649409.285:2550):  cwd="/"
+type=PATH msg=audit(1783649409.285:2550): item=0 name="/usr/bin/lsb_release" inode=2097308 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.285:2550): item=1 name=(null) inode=2098176 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.285:2550): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.321:2552): arch=c000003e syscall=59 success=yes exit=0 a0=7fd4874830b8 a1=7fd487483110 a2=7fd487483120 a3=fffffffffffffc42 items=3 ppid=3993 pid=4001 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="release-upgrade" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.321:2552): argc=3 a0="/bin/sh" a1="-e" a2="/usr/lib/ubuntu-release-upgrader/release-upgrade-motd"
+type=CWD msg=audit(1783649409.321:2552):  cwd="/"
+type=PATH msg=audit(1783649409.321:2552): item=0 name="/usr/lib/ubuntu-release-upgrader/release-upgrade-motd" inode=135267 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.321:2552): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.321:2552): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.321:2553): arch=c000003e syscall=59 success=yes exit=0 a0=7f0b65529ae0 a1=7f0b65529ab0 a2=7f0b65529ac8 a3=7f0b64af7b70 items=2 ppid=4001 pid=4005 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="date" exe="/bin/date" key="exec_watch"
+type=EXECVE msg=audit(1783649409.321:2553): argc=2 a0="date" a1="+%s"
+type=CWD msg=audit(1783649409.321:2553):  cwd="/"
+type=PATH msg=audit(1783649409.321:2553): item=0 name="/bin/date" inode=272818 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.321:2553): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.325:2554): arch=c000003e syscall=59 success=yes exit=0 a0=7f0b65529b80 a1=7f0b65529b40 a2=7f0b65529b68 a3=2 items=2 ppid=4001 pid=4006 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="stat" exe="/usr/bin/stat" key="exec_watch"
+type=EXECVE msg=audit(1783649409.325:2554): argc=4 a0="stat" a1="-c" a2="%Y" a3="/var/lib/ubuntu-release-upgrader/release-upgrade-available"
+type=CWD msg=audit(1783649409.325:2554):  cwd="/"
+type=PATH msg=audit(1783649409.325:2554): item=0 name="/usr/bin/stat" inode=2113119 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.325:2554): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.329:2555): arch=c000003e syscall=59 success=yes exit=0 a0=7f0b65529b30 a1=7f0b65529af0 a2=7f0b65529b18 a3=fffffffffffffa92 items=2 ppid=4001 pid=4007 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="expr" exe="/usr/bin/expr" key="exec_watch"
+type=EXECVE msg=audit(1783649409.329:2555): argc=4 a0="expr" a1="1783600357" a2="+" a3="86400"
+type=CWD msg=audit(1783649409.329:2555):  cwd="/"
+type=PATH msg=audit(1783649409.329:2555): item=0 name="/usr/bin/expr" inode=2100957 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.329:2555): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.333:2556): arch=c000003e syscall=59 success=yes exit=0 a0=7f0b65529b08 a1=7f0b65529ad8 a2=7f0b65529af0 a3=7f0b64f8fa10 items=2 ppid=4001 pid=4008 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="cat" exe="/bin/cat" key="exec_watch"
+type=EXECVE msg=audit(1783649409.333:2556): argc=2 a0="cat" a1="/var/lib/ubuntu-release-upgrader/release-upgrade-available"
+type=CWD msg=audit(1783649409.333:2556):  cwd="/"
+type=PATH msg=audit(1783649409.333:2556): item=0 name="/bin/cat" inode=272814 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.333:2556): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_START msg=audit(1783649409.333:2557): pid=3977 uid=0 auid=900 ses=16 msg='op=PAM:session_open acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_ACQ msg=audit(1783649409.333:2558): pid=4009 uid=0 auid=900 ses=16 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=SYSCALL msg=audit(1783649409.337:2559): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2e1050 a3=8 items=2 ppid=4009 pid=4010 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.337:2559): argc=3 a0="bash" a1="-c" a2=62617368202D6320276964272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649409.337:2559):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649409.337:2559): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.337:2559): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.341:2560): arch=c000003e syscall=59 success=yes exit=0 a0=25cd548 a1=25ceb48 a2=25cec08 a3=7fff395e6e30 items=2 ppid=4009 pid=4010 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649409.341:2560): argc=4 a0="bash" a1="-c" a2="id" a3="this_is_the_injection"
+type=CWD msg=audit(1783649409.341:2560):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649409.341:2560): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.341:2560): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649409.345:2561): arch=c000003e syscall=59 success=yes exit=0 a0=1a62b48 a1=1a61a48 a2=1a62008 a3=7fff28d81e20 items=2 ppid=4009 pid=4010 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="id" exe="/usr/bin/id" key="exec_watch"
+type=EXECVE msg=audit(1783649409.345:2561): argc=1 a0="id"
+type=CWD msg=audit(1783649409.345:2561):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649409.345:2561): item=0 name="/usr/bin/id" inode=2113128 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649409.345:2561): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.361:2562): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2e1050 a3=8 items=2 ppid=4009 pid=4011 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.361:2562): argc=3 a0="bash" a1="-c" a2=62617368202D6320276964272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649415.361:2562):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.361:2562): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.361:2562): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.361:2563): arch=c000003e syscall=59 success=yes exit=0 a0=1a6a548 a1=1a6bb48 a2=1a6bc08 a3=7fff634391d0 items=2 ppid=4009 pid=4011 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.361:2563): argc=4 a0="bash" a1="-c" a2="id" a3="this_is_the_injection"
+type=CWD msg=audit(1783649415.361:2563):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.361:2563): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.361:2563): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.361:2564): arch=c000003e syscall=59 success=yes exit=0 a0=cdbb48 a1=cdaa48 a2=cdb008 a3=7fff50e39fb0 items=2 ppid=4009 pid=4011 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="id" exe="/usr/bin/id" key="exec_watch"
+type=EXECVE msg=audit(1783649415.361:2564): argc=1 a0="id"
+type=CWD msg=audit(1783649415.361:2564):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.361:2564): item=0 name="/usr/bin/id" inode=2113128 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.361:2564): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.413:2565): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2de020 a3=8 items=2 ppid=4009 pid=4012 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.413:2565): argc=3 a0="bash" a1="-c" a2=62617368202D632027756E616D65202D61272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649415.413:2565):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.413:2565): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.413:2565): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.413:2566): arch=c000003e syscall=59 success=yes exit=0 a0=124d548 a1=124eb48 a2=124ec08 a3=7fff2daecb20 items=2 ppid=4009 pid=4012 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.413:2566): argc=4 a0="bash" a1="-c" a2=756E616D65202D61 a3="this_is_the_injection"
+type=CWD msg=audit(1783649415.413:2566):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.413:2566): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.413:2566): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.417:2567): arch=c000003e syscall=59 success=yes exit=0 a0=1adece8 a1=1adee08 a2=1ade008 a3=7fff232d67c0 items=2 ppid=4009 pid=4012 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1783649415.417:2567): argc=2 a0="uname" a1="-a"
+type=CWD msg=audit(1783649415.417:2567):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.417:2567): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.417:2567): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.465:2568): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2e1050 a3=8 items=2 ppid=4009 pid=4013 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.465:2568): argc=3 a0="bash" a1="-c" a2=62617368202D632027636174202F6574632F67726F7570272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649415.465:2568):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.465:2568): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.465:2568): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.469:2569): arch=c000003e syscall=59 success=yes exit=0 a0=af7548 a1=af8b48 a2=af8c08 a3=7fff6a6c7300 items=2 ppid=4009 pid=4013 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.469:2569): argc=4 a0="bash" a1="-c" a2=636174202F6574632F67726F7570 a3="this_is_the_injection"
+type=CWD msg=audit(1783649415.469:2569):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.469:2569): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.469:2569): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.469:2570): arch=c000003e syscall=59 success=yes exit=0 a0=1472ce8 a1=1472e08 a2=1472008 a3=7fff38666180 items=2 ppid=4009 pid=4013 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="cat" exe="/bin/cat" key="exec_watch"
+type=EXECVE msg=audit(1783649415.469:2570): argc=2 a0="cat" a1="/etc/group"
+type=CWD msg=audit(1783649415.469:2570):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.469:2570): item=0 name="/bin/cat" inode=272814 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.469:2570): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.517:2571): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2de020 a3=8 items=2 ppid=4009 pid=4014 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.517:2571): argc=3 a0="bash" a1="-c" a2=62617368202D6320277375646F202D6E202D6C20323E2F6465762F6E756C6C272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649415.517:2571):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.517:2571): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.517:2571): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.517:2572): arch=c000003e syscall=59 success=yes exit=0 a0=cd2b48 a1=cd1bc8 a2=cd2c08 a3=7fffc6bf6bc0 items=2 ppid=4009 pid=4014 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649415.517:2572): argc=4 a0="bash" a1="-c" a2=7375646F202D6E202D6C20323E2F6465762F6E756C6C a3="this_is_the_injection"
+type=CWD msg=audit(1783649415.517:2572):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.517:2572): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.517:2572): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649415.525:2573): arch=c000003e syscall=59 success=yes exit=0 a0=1919f08 a1=191a448 a2=1919008 a3=7fffc24cf200 items=2 ppid=4014 pid=4015 auid=900 uid=900 gid=900 euid=0 suid=0 fsuid=0 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="sudo" exe="/usr/bin/sudo" key="exec_watch"
+type=BPRM_FCAPS msg=audit(1783649415.525:2573): fver=0 fp=0000000000000000 fi=0000000000000000 fe=0 old_pp=0000000000000000 old_pi=0000000000000000 old_pe=0000000000000000 new_pp=ffffffffffffffff new_pi=0000000000000000 new_pe=ffffffffffffffff
+type=EXECVE msg=audit(1783649415.525:2573): argc=3 a0="sudo" a1="-n" a2="-l"
+type=CWD msg=audit(1783649415.525:2573):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649415.525:2573): item=0 name="/usr/bin/sudo" inode=2098812 dev=fc:00 mode=0104755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649415.525:2573): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649421.541:2574): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2e1050 a3=8 items=2 ppid=4009 pid=4016 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649421.541:2574): argc=3 a0="bash" a1="-c" a2=6563686F20222A202A202A202A202A20726F6F74202F62696E2F62617368202D6320272F62696E2F746F756368202F746D702F706572736973745F63726F6E5F6D61726B65722720746869735F69735F7468655F696E6A656374696F6E22207C207375646F202D6E20746565202F6574632F63726F6E2E642F706572736973745F64656D6F203E2F6465762F6E756C6C
+type=CWD msg=audit(1783649421.541:2574):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.541:2574): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.541:2574): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649421.545:2575): arch=c000003e syscall=59 success=yes exit=0 a0=1e64708 a1=1e64c08 a2=1e65808 a3=7fff1787b300 items=2 ppid=4016 pid=4018 auid=900 uid=900 gid=900 euid=0 suid=0 fsuid=0 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="sudo" exe="/usr/bin/sudo" key="exec_watch"
+type=BPRM_FCAPS msg=audit(1783649421.545:2575): fver=0 fp=0000000000000000 fi=0000000000000000 fe=0 old_pp=0000000000000000 old_pi=0000000000000000 old_pe=0000000000000000 new_pp=ffffffffffffffff new_pi=0000000000000000 new_pe=ffffffffffffffff
+type=EXECVE msg=audit(1783649421.545:2575): argc=4 a0="sudo" a1="-n" a2="tee" a3="/etc/cron.d/persist_demo"
+type=CWD msg=audit(1783649421.545:2575):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.545:2575): item=0 name="/usr/bin/sudo" inode=2098812 dev=fc:00 mode=0104755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.545:2575): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_START msg=audit(1783649421.553:2576): pid=4018 uid=0 auid=900 ses=16 msg='op=PAM:session_open acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=? res=success'
+type=SYSCALL msg=audit(1783649421.553:2577): arch=c000003e syscall=59 success=yes exit=0 a0=7f3518a6a558 a1=7f3518a654c8 a2=7f3518a7ba90 a3=7fffd7997d20 items=2 ppid=4018 pid=4019 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="tee" exe="/usr/bin/tee" key="exec_watch"
+type=EXECVE msg=audit(1783649421.553:2577): argc=2 a0="tee" a1="/etc/cron.d/persist_demo"
+type=CWD msg=audit(1783649421.553:2577):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.553:2577): item=0 name="/usr/bin/tee" inode=2113157 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.553:2577): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_END msg=audit(1783649421.557:2578): pid=4018 uid=0 auid=900 ses=16 msg='op=PAM:session_close acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=? res=success'
+type=SYSCALL msg=audit(1783649421.621:2579): arch=c000003e syscall=59 success=yes exit=0 a0=7fdb5c2c0940 a1=7fff965ec260 a2=7fdb5c2de020 a3=8 items=2 ppid=4009 pid=4020 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649421.621:2579): argc=3 a0="bash" a1="-c" a2=62617368202D6320277375646F202D6E20636174202F6574632F63726F6E2E642F706572736973745F64656D6F272022746869735F69735F7468655F696E6A656374696F6E22
+type=CWD msg=audit(1783649421.621:2579):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.621:2579): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.621:2579): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649421.625:2580): arch=c000003e syscall=59 success=yes exit=0 a0=1063e08 a1=1063b48 a2=1064c08 a3=7fffe82b3170 items=2 ppid=4009 pid=4020 auid=900 uid=900 gid=900 euid=900 suid=900 fsuid=900 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1783649421.625:2580): argc=4 a0="bash" a1="-c" a2=7375646F202D6E20636174202F6574632F63726F6E2E642F706572736973745F64656D6F a3="this_is_the_injection"
+type=CWD msg=audit(1783649421.625:2580):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.625:2580): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.625:2580): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1783649421.629:2581): arch=c000003e syscall=59 success=yes exit=0 a0=ab6f48 a1=ab7808 a2=ab6008 a3=7fffb88330e0 items=2 ppid=4009 pid=4020 auid=900 uid=900 gid=900 euid=0 suid=0 fsuid=0 egid=900 sgid=900 fsgid=900 ses=16 tty=(none) comm="sudo" exe="/usr/bin/sudo" key="exec_watch"
+type=BPRM_FCAPS msg=audit(1783649421.629:2581): fver=0 fp=0000000000000000 fi=0000000000000000 fe=0 old_pp=0000000000000000 old_pi=0000000000000000 old_pe=0000000000000000 new_pp=ffffffffffffffff new_pi=0000000000000000 new_pe=ffffffffffffffff
+type=EXECVE msg=audit(1783649421.629:2581): argc=4 a0="sudo" a1="-n" a2="cat" a3="/etc/cron.d/persist_demo"
+type=CWD msg=audit(1783649421.629:2581):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.629:2581): item=0 name="/usr/bin/sudo" inode=2098812 dev=fc:00 mode=0104755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.629:2581): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_START msg=audit(1783649421.641:2582): pid=4020 uid=0 auid=900 ses=16 msg='op=PAM:session_open acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=? res=success'
+type=SYSCALL msg=audit(1783649421.641:2583): arch=c000003e syscall=59 success=yes exit=0 a0=7faa956a4558 a1=7faa9569f4c8 a2=7faa956b5a90 a3=7fff30d88280 items=2 ppid=4020 pid=4021 auid=900 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=16 tty=(none) comm="cat" exe="/bin/cat" key="exec_watch"
+type=EXECVE msg=audit(1783649421.641:2583): argc=2 a0="cat" a1="/etc/cron.d/persist_demo"
+type=CWD msg=audit(1783649421.641:2583):  cwd="/home/vagrant"
+type=PATH msg=audit(1783649421.641:2583): item=0 name="/bin/cat" inode=272814 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1783649421.641:2583): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=USER_END msg=audit(1783649421.645:2584): pid=4020 uid=0 auid=900 ses=16 msg='op=PAM:session_close acct="root" exe="/usr/bin/sudo" hostname=? addr=? terminal=? res=success'
+type=USER_END msg=audit(1783649421.825:2585): pid=3977 uid=0 auid=900 ses=16 msg='op=PAM:session_close acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
+type=CRED_DISP msg=audit(1783649421.825:2586): pid=3977 uid=0 auid=900 ses=16 msg='op=PAM:setcred acct="vagrant" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=success'
