@@ -103,6 +103,7 @@ def classify(model: str, log_text: str) -> str:
         ],
         "stream": False,
         "keep_alive": 0,
+        "format": "json",
         "options": {"temperature": TEMPERATURE, "num_ctx": NUM_CTX},
     })
     resp.raise_for_status()

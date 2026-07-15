@@ -4,6 +4,7 @@
 # generated outputs
 attack_logs_injected/
 results/
+analysis/
 
 # notebook checkpoints
 .ipynb_checkpoints/

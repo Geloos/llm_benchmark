@@ -3,13 +3,16 @@
 main.py
 
 One entry point for the whole pipeline. Runs, in order:
-  1. scripts/inject_prompts.py   attack_logs + injections -> attack_logs_injected/
-  2. scripts/run_benchmark.py    attack_logs_injected     -> results/
+  1. scripts/inject_prompts.py     attack_logs + injections -> attack_logs_injected/
+  2. scripts/run_benchmark.py      attack_logs_injected     -> results/
+  3. scripts/summarize_results.py  results                  -> analysis/
 
 How to run it:
-  python main.py                 # inject, then benchmark (all defaults)
-  python main.py --skip-inject   # skip step 1, only run the benchmark
-  python main.py --skip-benchmark  # only (re)build attack_logs_injected/
+  python main.py                 # inject, benchmark, then summarize (all defaults)
+  python main.py --skip-inject   # skip step 1, only run benchmark + summary
+  python main.py --skip-benchmark  # only (re)build attack_logs_injected/, then summarize
+  python main.py --skip-summary  # inject + benchmark, no analysis
+  python main.py --skip-inject --skip-benchmark  # only re-run the analysis (step 3)
 
   Any extra args after the known flags are forwarded to run_benchmark.py, e.g.
       python main.py --models llama3.1:8b --injections T0 T1
@@ -17,7 +20,8 @@ How to run it:
 
 Notes:
   - Paths are resolved relative to this file, so it works from any cwd.
-  - If step 1 fails, step 2 does not run.
+  - If step 1 fails, steps 2 and 3 do not run. The summary (step 3) runs independently of
+    the inject/benchmark skips, so you can re-summarize existing results on their own.
 """
 
 import argparse
@@ -29,6 +33,7 @@ ROOT = Path(__file__).resolve().parent
 SCRIPTS = ROOT / "scripts"
 INJECT = SCRIPTS / "inject_prompts.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
+SUMMARIZE = SCRIPTS / "summarize_results.py"
 
 
 def run_step(name: str, script: Path, extra_args: list[str]) -> int:
@@ -49,6 +54,8 @@ def main() -> int:
                     help="skip step 1 (reuse the existing attack_logs_injected/)")
     ap.add_argument("--skip-benchmark", action="store_true",
                     help="skip step 2 (only rebuild attack_logs_injected/)")
+    ap.add_argument("--skip-summary", action="store_true",
+                    help="skip step 3 (do not (re)build analysis/)")
     args, benchmark_args = ap.parse_known_args()
 
     if not args.skip_inject:
@@ -66,6 +73,14 @@ def main() -> int:
             return rc
     else:
         print("\n=== STEP 2  run benchmark -> skipped ===")
+
+    if not args.skip_summary:
+        rc = run_step("STEP 3  summarize results", SUMMARIZE, [])
+        if rc != 0:
+            print(f"\nsummary step failed (exit {rc}).")
+            return rc
+    else:
+        print("\n=== STEP 3  summarize results -> skipped ===")
 
     print("\ndone.")
     return 0
