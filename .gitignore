@@ -13,3 +13,6 @@ analysis/
 # python caches
 __pycache__/
 *.pyc
+
+#claude
+claude.md

