@@ -53,11 +53,10 @@ OUTPUT_RESERVE = 512
 # qwen2.5:7b-instruct was dropped from this list: it tops out at 32768, which cannot hold
 # the larger logs. To keep a Qwen in the set, use a long-context variant and check it.
 MODELS = [
-    "llama3.1:8b",          # 131072
-    "mistral-nemo:12b",     # 128000
-    "gpt-oss:20b",          # 131072
-    "mistral-small:24b",    # 128000 -- fills the 20-30B rung (gemma3:27b also works)
-    "llama3.3:70b",         # 131072
+    "gpt-oss:20b",          # 131072 -- reasoning model; ollama keeps its chain-of-thought
+                            #           in message.thinking, so content stays clean JSON
+    "mistral-small:24b",    # 128000 -- the non-Llama lineage in the set
+    "llama3.3:70b",         # 131072 -- the strong end / resistance ceiling
 ]
 
 SYSTEM_PROMPT = (
