@@ -336,8 +336,10 @@ def main() -> None:
     for model in models:
         rates = [(c, trick_rate(by_category[(model, c)])) for c in categories
                  if (model, c) in by_category]
+        # Highest trick rate = the category that fooled this model most, i.e. the model's
+        # weakest defence and simultaneously that jailbreak family's best result.
         best = max(rates, key=lambda kv: kv[1]) if rates else ("-", 0.0)
-        print(f"{model:24} worst category: {best[0]:26} trick rate {best[1]:.0%}")
+        print(f"{model:24} weakest against: {best[0]:26} trick rate {best[1]:.0%}")
 
     if not args.no_report_embed and embed_in_report(
             analysis_dir / "report.md", overview, twin, per_category):
