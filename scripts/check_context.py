@@ -10,7 +10,8 @@ happened -- so the only honest evidence is the token count it reports back.
 Two checks per model:
   1. declared -- /api/show gives the model's trained context length. If that is smaller
                  than the num_ctx the benchmark asks for, the extra window is fiction
-                 (qwen2.5:7b-instruct is trained at 32768, not 60069).
+                 (qwen2.5:14b-instruct is trained at 32768, not the 81920 the benchmark
+                 asks for).
   2. measured -- sends the LARGEST injected file of every log folder with num_predict=1
                  and reads `prompt_eval_count`: the number of tokens really fed to the
                  model. Truncation can only push that count UP TO the limit, so a count
@@ -19,7 +20,7 @@ Two checks per model:
 
 How to run it:
   python scripts/check_context.py                      # every model, every log folder
-  python scripts/check_context.py --models qwen2.5:7b-instruct --num-ctx 32768
+  python scripts/check_context.py --models qwen2.5:14b-instruct --num-ctx 32768
   python scripts/check_context.py --logs drupal ssh
   python scripts/check_context.py --all-files          # probe every injected file, not
                                                        # just the biggest one per folder

@@ -7,17 +7,19 @@ One entry point for the whole pipeline. Runs, in order:
   1b. scripts/check_context.py     attack_logs_injected     -> analysis/context_check.csv
   2. scripts/run_benchmark.py      attack_logs_injected     -> results/
   3. scripts/summarize_results.py  results                  -> analysis/
+  4. scripts/plot_results.py       analysis/verdicts.csv    -> analysis/charts/
 
 Step 1b is a preflight: it proves each model really ingests a whole injected log instead
 of a silently truncated one, and aborts the run if it does not.
 
 How to run it:
-  python main.py                 # inject, check, benchmark, then summarize (all defaults)
-  python main.py --skip-inject   # skip step 1, only check + benchmark + summary
+  python main.py                 # inject, check, benchmark, summarize, then chart
+  python main.py --skip-inject   # skip step 1, only check + benchmark + summary + charts
   python main.py --skip-check    # trust num_ctx, go straight to the benchmark
   python main.py --skip-benchmark  # only (re)build attack_logs_injected/, then summarize
   python main.py --skip-summary  # inject + benchmark, no analysis
-  python main.py --skip-inject --skip-benchmark  # only re-run the analysis (step 3)
+  python main.py --skip-charts   # skip step 4 (e.g. matplotlib is not installed)
+  python main.py --skip-inject --skip-benchmark  # only re-run the analysis (steps 3 + 4)
 
   Any extra args after the known flags are forwarded to run_benchmark.py, e.g.
       python main.py --models llama3.1:8b --injections DO_ PH_
@@ -25,9 +27,14 @@ How to run it:
 
 Notes:
   - Paths are resolved relative to this file, so it works from any cwd.
-  - If step 1 fails, steps 2 and 3 do not run. The summary (step 3) runs independently of
-    the inject/benchmark skips, so you can re-summarize existing results on their own.
+  - If step 1 fails, the later steps do not run. The summary (step 3) and the charts
+    (step 4) run independently of the inject/benchmark skips, so you can re-summarize
+    existing results on their own.
+  - Step 4 runs last and needs matplotlib, so a missing dependency can never cost a
+    benchmark run -- everything else is already on disk by the time it is reached.
 """
+
+from __future__ import annotations  
 
 import argparse
 import subprocess
@@ -40,6 +47,7 @@ INJECT = SCRIPTS / "inject_prompts.py"
 CHECK = SCRIPTS / "check_context.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
 SUMMARIZE = SCRIPTS / "summarize_results.py"
+CHARTS = SCRIPTS / "plot_results.py"
 
 
 def run_step(name: str, script: Path, extra_args: list[str]) -> int:
@@ -77,6 +85,8 @@ def main() -> int:
                     help="skip step 2 (only rebuild attack_logs_injected/)")
     ap.add_argument("--skip-summary", action="store_true",
                     help="skip step 3 (do not (re)build analysis/)")
+    ap.add_argument("--skip-charts", action="store_true",
+                    help="skip step 4 (do not (re)draw analysis/charts/)")
     args, benchmark_args = ap.parse_known_args()
 
     if not args.skip_inject:
@@ -113,6 +123,14 @@ def main() -> int:
             return rc
     else:
         print("\n=== STEP 3  summarize results -> skipped ===")
+
+    if not args.skip_charts:
+        rc = run_step("STEP 4  plot charts", CHARTS, [])
+        if rc != 0:
+            print(f"\nchart step failed (exit {rc}).")
+            return rc
+    else:
+        print("\n=== STEP 4  plot charts -> skipped ===")
 
     print("\ndone.")
     return 0

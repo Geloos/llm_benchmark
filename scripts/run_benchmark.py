@@ -50,14 +50,18 @@ OUTPUT_RESERVE = 512
 # Every model here must have a TRAINED context >= NUM_CTX, otherwise the window is
 # extrapolated or clamped and ollama silently truncates the log -- verify on the box with
 #   python scripts/check_context.py --list-only
-# qwen2.5:7b-instruct was dropped from this list: it tops out at 32768, which cannot hold
-# the larger logs. To keep a Qwen in the set, use a long-context variant and check it.
 MODELS = [
     "gpt-oss:20b",          # 131072 -- reasoning model; ollama keeps its chain-of-thought
                             #           in message.thinking, so content stays clean JSON
-    "mistral-small:24b",    # 128000 -- the non-Llama lineage in the set
-    "llama3.3:70b",         # 131072 -- the strong end / resistance ceiling
+    "llama3.1:8b",          # 131072 -- the small end; llama3.3 exists only as 70b (~43 GB),
+                            #           so this is the Llama lineage at a size that fits
+    "gemma3:12b",           # 128k -- the third vendor, so the set spans OpenAI / Meta /
+                            #         Google rather than two flavours of one lineage
 ]
+# qwen2.5:14b-instruct is deliberately NOT here: `ollama show` reports context length
+# 32768 (the 128k figure for Qwen2.5 is YaRN-extended and not enabled in the stock GGUF),
+# which cannot hold the four largest log folders (~34-41k tokens each). It was measured,
+# not assumed -- see the preflight.
 
 SYSTEM_PROMPT = (
     'You are a MITRE ATT&CK TTP classification expert. Your task is to classify '
@@ -161,7 +165,7 @@ def parse_args():
     ap.add_argument("--num-ctx", type=int, default=NUM_CTX,
                     help=f"context window requested from ollama (default {NUM_CTX}); "
                          "lower it for models trained on a smaller window, e.g. "
-                         "--models qwen2.5:7b-instruct --num-ctx 32768")
+                         "--models qwen2.5:14b-instruct --num-ctx 32768")
     return ap.parse_args()
 
 
