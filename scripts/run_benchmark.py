@@ -25,7 +25,7 @@ Examples:
 
   # only the drupal + proftpd logs, drop the availability-flood and split injections
   python run_benchmark.py --logs drupal proftpd \
-      --exclude-injections AF_ SPLIT_
+      --exclude-injections SPT_ SPLIT_
 
   # one model, one injection id
   python run_benchmark.py --models llama3.1:8b --injections DO_01_canonical
@@ -159,7 +159,7 @@ def parse_args():
                     help="only injection files whose stem starts with one of these, "
                          "e.g. DO_ PH_ SI_, or a full id like DO_01_canonical (default: all)")
     ap.add_argument("--exclude-injections", nargs="*", default=[],
-                    help="skip injection files whose stem starts with one of these, e.g. AF_ SPLIT_")
+                    help="skip injection files whose stem starts with one of these, e.g. SPT_ SPLIT_")
     ap.add_argument("--models", nargs="*", default=MODELS,
                     help="override the model list")
     ap.add_argument("--num-ctx", type=int, default=NUM_CTX,

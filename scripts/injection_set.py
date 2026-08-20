@@ -10,7 +10,8 @@ What it does:
 
   Each jsonl row is {"id", "category", "payload", "tag"}: `payload` is the free-text
   variant (Apache user-agent, sshd username, ...), `tag` the underscored auditd-safe
-  variant of the same idea.
+  variant of the same idea. A `tag` goes verbatim into the auditd a3=/a4=/acct= field the
+  marker sits in, so it must stay a single token -- no spaces, no double-quotes.
 
   Split payloads are written as two rows -- SPLIT_01a_primer_tagrule teaches the rule,
   SPLIT_01b_activation_tagrule fires it -- and only work when both land in the same file.
@@ -34,7 +35,7 @@ import sys
 
 # SPLIT_01a_primer_tagrule -> base SPLIT_01, stage a, rest _primer_tagrule. The trailing
 # digits + single a/b letter are what mark a row as one half of a pair; ordinary ids
-# (DO_01_canonical, OB64_01_hinted, AF_02_long_token) have a '_' there and do not match.
+# (DO_01_canonical, SPT_01_direct, CC_02_ambiguous) have a '_' there and do not match.
 STAGE_RE = re.compile(r'^(?P<base>.+_\d+)(?P<stage>[ab])(?P<rest>_.*)?$')
 
 # Dropped from the merged id: the pair is one injection, so "which half" no longer applies.
