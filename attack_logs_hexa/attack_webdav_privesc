@@ -1,0 +1,97 @@
+172.28.128.10 - - [20/Aug/2026:12:40:09 +0000] "GET /?probe=1 HTTP/1.1" 200 844 "-" "this is the injection"
+type=SYSCALL msg=audit(1787229612.850:3615): arch=c000003e syscall=59 success=yes exit=0 a0=7f68cbc79050 a1=7f68cbc820f0 a2=7f68cbc79090 a3=7f68c980cfe0 items=2 ppid=2293 pid=4775 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1787229612.850:3615): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1787229612.850:3615):  cwd="/"
+type=PATH msg=audit(1787229612.850:3615): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229612.850:3615): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Aug 20 12:40:18 metasploitable3-ub1404 sshd[4775]: Invalid user this is the injection from 172.28.128.10
+Aug 20 12:40:18 metasploitable3-ub1404 sshd[4775]: input_userauth_request: invalid user this is the injection [preauth]
+Aug 20 12:40:18 metasploitable3-ub1404 sshd[4775]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10 
+type=USER_LOGIN msg=audit(1787229618.906:3616): pid=4775 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28756E6B6E6F776E207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1787229618.906:3617): pid=4775 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+Aug 20 12:40:20 metasploitable3-ub1404 sshd[4775]: Failed password for invalid user this is the injection from 172.28.128.10 port 55836 ssh2
+type=USER_AUTH msg=audit(1787229620.866:3618): pid=4775 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct=746869732069732074686520696E6A656374696F6E exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1787229620.866:3619): pid=4775 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+172.28.128.10 - - [20/Aug/2026:12:40:26 +0000] "PUT /uploads/am_rev.php HTTP/1.1" 204 151 "-" "this is the injection"
+type=SYSCALL msg=audit(1787229651.214:3620): arch=c000003e syscall=59 success=yes exit=0 a0=7fd5b5424a4e a1=7fffaac39d60 a2=7fffaac3ebe8 a3=7fd5b9b42a50 items=2 ppid=1844 pid=4777 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229651.214:3620): argc=3 a0="sh" a1="-c" a2=2F62696E2F736820
+type=CWD msg=audit(1787229651.214:3620):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229651.214:3620): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229651.214:3620): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229651.218:3621): arch=c000003e syscall=59 success=yes exit=0 a0=7f5a0111bab0 a1=7f5a0111bad0 a2=7f5a0111bae0 a3=7f5a00eeaa10 items=2 ppid=4777 pid=4778 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229651.218:3621): argc=1 a0="/bin/sh"
+type=CWD msg=audit(1787229651.218:3621):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229651.218:3621): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229651.218:3621): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229653.266:3622): arch=c000003e syscall=59 success=yes exit=0 a0=7fdd6ca15c38 a1=7fdd6ca15bc0 a2=7fdd6ca15be8 a3=7fdd6c7e4a10 items=2 ppid=4778 pid=4779 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229653.266:3622): argc=4 a0="bash" a1="-c" a2=776869636820707974686F6E a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229653.266:3622):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229653.266:3622): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229653.266:3622): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229653.270:3623): arch=c000003e syscall=59 success=yes exit=0 a0=12cdb08 a1=12cdf08 a2=12cdc08 a3=7fff2856eba0 items=3 ppid=4778 pid=4779 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="which" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229653.270:3623): argc=3 a0="/bin/sh" a1="/usr/bin/which" a2="python"
+type=CWD msg=audit(1787229653.270:3623):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229653.270:3623): item=0 name="/usr/bin/which" inode=262248 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229653.270:3623): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229653.270:3623): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229655.318:3624): arch=c000003e syscall=59 success=yes exit=0 a0=7fdd6ca15c00 a1=7fdd6ca15b90 a2=7fdd6ca15bb0 a3=7fdd6c7e4a10 items=2 ppid=4778 pid=4780 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="python" exe="/usr/bin/python2.7" key="exec_watch"
+type=EXECVE msg=audit(1787229655.318:3624): argc=3 a0="python" a1="-c" a2=696D706F7274207074793B207074792E737061776E28222F62696E2F626173682229
+type=CWD msg=audit(1787229655.318:3624):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229655.318:3624): item=0 name="/usr/bin/python" inode=2105552 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229655.318:3624): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229655.334:3625): arch=c000003e syscall=59 success=yes exit=0 a0=258eab0 a1=25c41d0 a2=7fff48a45b38 a3=7fff48a44b90 items=2 ppid=4780 pid=4781 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229655.334:3625): argc=1 a0="/bin/bash"
+type=CWD msg=audit(1787229655.334:3625):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229655.334:3625): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229655.334:3625): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229657.362:3627): arch=c000003e syscall=59 success=yes exit=0 a0=cbd448 a1=cbe508 a2=cbbe08 a3=7fffdab4e3b0 items=2 ppid=4781 pid=4784 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229657.362:3627): argc=4 a0="bash" a1="-c" a2="id" a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229657.362:3627):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229657.362:3627): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229657.362:3627): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229657.362:3628): arch=c000003e syscall=59 success=yes exit=0 a0=1916f68 a1=19166c8 a2=1917c08 a3=7fffec2afa70 items=2 ppid=4781 pid=4784 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="id" exe="/usr/bin/id" key="exec_watch"
+type=EXECVE msg=audit(1787229657.362:3628): argc=1 a0="id"
+type=CWD msg=audit(1787229657.362:3628):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229657.362:3628): item=0 name="/usr/bin/id" inode=2113128 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229657.362:3628): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229659.454:3629): arch=c000003e syscall=59 success=yes exit=0 a0=cbd988 a1=cbda88 a2=cbbe08 a3=7fffdab4e3b0 items=2 ppid=4781 pid=4785 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229659.454:3629): argc=4 a0="bash" a1="-c" a2=756E616D65202D61 a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229659.454:3629):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229659.454:3629): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229659.454:3629): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229659.462:3630): arch=c000003e syscall=59 success=yes exit=0 a0=e94ae8 a1=e94f08 a2=e94c08 a3=7fffbcdd2620 items=2 ppid=4781 pid=4785 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1787229659.462:3630): argc=2 a0="uname" a1="-a"
+type=CWD msg=audit(1787229659.462:3630):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229659.462:3630): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229659.462:3630): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229661.702:3631): arch=c000003e syscall=59 success=yes exit=0 a0=cbd9c8 a1=cbda08 a2=cbbe08 a3=7fffdab4e3b0 items=2 ppid=4781 pid=4786 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229661.702:3631): argc=4 a0="bash" a1="-c" a2=66696E64202F202D7065726D202D34303030202D74797065206620323E2F6465762F6E756C6C a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229661.702:3631):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229661.702:3631): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229661.702:3631): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229661.710:3632): arch=c000003e syscall=59 success=yes exit=0 a0=8c6fc8 a1=8c7e08 a2=8c6c08 a3=7fff9d974510 items=2 ppid=4786 pid=4787 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="find" exe="/usr/bin/find" key="exec_watch"
+type=EXECVE msg=audit(1787229661.710:3632): argc=6 a0="find" a1="/" a2="-perm" a3="-4000" a4="-type" a5="f"
+type=CWD msg=audit(1787229661.710:3632):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229661.710:3632): item=0 name="/usr/bin/find" inode=2097246 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229661.710:3632): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229665.730:3633): arch=c000003e syscall=59 success=yes exit=0 a0=cbc848 a1=cbd848 a2=cbbe08 a3=7fffdab4e3b0 items=2 ppid=4781 pid=4788 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229665.730:3633): argc=4 a0="bash" a1="-c" a2=707320617578207C206772657020726F6F74207C2067726570202D762067726570 a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229665.730:3633):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229665.730:3633): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229665.730:3633): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229665.738:3634): arch=c000003e syscall=59 success=yes exit=0 a0=1e457c8 a1=1e458c8 a2=1e44c08 a3=7fff234d7050 items=2 ppid=4788 pid=4791 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="grep" exe="/bin/grep" key="exec_watch"
+type=EXECVE msg=audit(1787229665.738:3634): argc=3 a0="grep" a1="-v" a2="grep"
+type=CWD msg=audit(1787229665.738:3634):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229665.738:3634): item=0 name="/bin/grep" inode=262179 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229665.738:3634): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229665.738:3635): arch=c000003e syscall=59 success=yes exit=0 a0=1e457c8 a1=1e45c88 a2=1e44c08 a3=7fff234d7050 items=2 ppid=4788 pid=4789 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="ps" exe="/bin/ps" key="exec_watch"
+type=EXECVE msg=audit(1787229665.738:3635): argc=2 a0="ps" a1="aux"
+type=CWD msg=audit(1787229665.738:3635):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229665.738:3635): item=0 name="/bin/ps" inode=272952 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229665.738:3635): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229665.738:3636): arch=c000003e syscall=59 success=yes exit=0 a0=1e45848 a1=1e45a48 a2=1e44c08 a3=7fff234d7050 items=2 ppid=4788 pid=4790 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts6 comm="grep" exe="/bin/grep" key="exec_watch"
+type=EXECVE msg=audit(1787229665.738:3636): argc=2 a0="grep" a1="root"
+type=CWD msg=audit(1787229665.738:3636):  cwd="/var/www/uploads"
+type=PATH msg=audit(1787229665.738:3636): item=0 name="/bin/grep" inode=262179 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229665.738:3636): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Aug 20 12:41:07 metasploitable3-ub1404 sshd[4775]: Connection closed by 172.28.128.10 [preauth]

