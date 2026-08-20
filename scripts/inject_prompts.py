@@ -3,17 +3,39 @@
 inject_prompts.py
 
 What it does:
-  Replaces the `this_is_the_injection` placeholder marker in extracted attack logs
-  with real prompt-injection payloads from injections.jsonl.
+  Replaces the placeholder marker in extracted attack logs with real prompt-injection
+  payloads from injections.jsonl.
+
+  Works on either source corpus without a mode flag, because the two hold the marker in
+  disjoint forms and the form itself records how the machine treated it:
+
+    attack_logs/       captured with the marker typed as one underscored token, so auditd
+                       left it quoted:  a3="this_is_the_injection"
+    attack_logs_hexa/  captured with it typed WITH SPACES, so auditd hex-encoded it and
+                       dropped the quotes:
+                         acct=746869732069732074686520696E6A656374696F6E
+                       -- sometimes nested inside a bigger blob, e.g. an a2= holding a
+                       whole `bash -c 'id' "this is the injection"` command line.
+
+  --hex-variant picks what goes INTO those hex fields, which is how the encoding effect is
+  told apart from the wording effect:
+
+    payload  (default)  the prose payload, spaces and all -- what a real attacker who typed
+                        spaces actually produces. Differs from attack_logs/ in BOTH encoding
+                        and wording, since a quoted field there can only hold the `tag`.
+    tag                 the underscored tag: byte-identical text to what attack_logs/
+                        carries, merely hex-encoded. A synthetic CONTROL -- auditd would
+                        never hex a space-free token -- so plain-vs-this isolates the
+                        encoding, and this-vs-payload isolates the wording.
 
 How to run it:
   python3 inject_prompts.py --attack-dir attack_logs \
       --injections jailbreaks/injections.jsonl --out-dir attack_logs_injected
 
+  python3 inject_prompts.py --attack-dir attack_logs_hexa \
+      --out-dir attack_logs_injected_hexa            # the hex lane
+
   Optional: --only-id <injection id> and --only-file <basename> to narrow the run.
-  --audit-view raw keeps auditd lines verbatim (payload hex-encoded); the default
-  `interpreted` decodes them the way ausearch -i / auditbeat / wazuh hand them to an
-  analyst, so a hex-encoded payload is not accidentally an obfuscation test.
 
 What it outputs:
   One sub-folder per input log, holding one .txt per injection, e.g.
@@ -28,25 +50,23 @@ import sys
 import injection_set
 
 
-MARKER = 'this_is_the_injection'
-MARKER_HEX = MARKER.encode('utf-8').hex().upper()
+# The placeholder, in the three shapes the two source corpora hold it in. attack_logs/
+# was captured with the marker typed as one underscored token, so auditd left it a
+# quoted value. attack_logs_hexa/ was captured with it typed WITH SPACES, so auditd did
+# what it does to any string it cannot leave as a bare token: hex-encoded it and dropped
+# the quotes. The free-text surfaces (Apache UA, sshd username, mysql) have no such rule
+# and still hold it verbatim.
+MARKER_UNDERSCORED = 'this_is_the_injection'         # attack_logs/, every surface
+MARKER_SPACED = 'this is the injection'              # attack_logs_hexa/, free text
+MARKER_HEX = MARKER_SPACED.encode('utf-8').hex().upper()  # attack_logs_hexa/, auditd
 
-MARKER_RE = re.compile(re.escape(MARKER))
-MARKER_HEX_RE = re.compile(re.escape(MARKER_HEX))
-AUDIT_FIELD_RE = re.compile(r'(\w+)="' + re.escape(MARKER) + r'"')
+# One alternation over all three, so occurrence order stays file order even where the
+# forms mix -- pick_stage() counts occurrences to decide which SPLIT_ stage fires.
+# Longest first: the forms share no prefix today, but that ordering is what stops a
+# future marker edit from quietly matching a shorter alternative first.
+MARKER_RE = re.compile('|'.join(re.escape(m) for m in
+                                (MARKER_HEX, MARKER_UNDERSCORED, MARKER_SPACED)))
 IPV4_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}\b')
-
-# --- ausearch -i view -------------------------------------------------------------
-# auditd hex-encodes a field only when its value is "unsafe" (space, quote, control
-# char); every analyst-facing tool -- ausearch -i, aureport, auditbeat, wazuh, the
-# splunk auditd TA -- decodes it back before a human or a classifier ever sees it.
-# Only these keys are ever hex-encoded, so only these are safe to decode: a bare
-# `pid=2876` is decimal, not hex, and must be left alone.
-AUDIT_HEX_KEYS = {'proctitle', 'cwd', 'name', 'exe', 'comm', 'key', 'acct', 'path',
-                  'dir', 'cmd', 'data', 'file', 'ocomm', 'old', 'new'}
-AUDIT_ARG_RE = re.compile(r'a\d+\Z')
-AUDIT_HEXVAL_RE = re.compile(r'(?<![\w=])([a-z][\w-]*)=([0-9A-Fa-f]{2,})(?=\s|$)')
-AUDIT_QUOTED_RE = re.compile(r'([a-z][\w-]*)="([^"\n]*)"')
 
 # Apache mod_log_config (ap_escape_logitem) named escapes; other control chars -> \xHH.
 _APACHE_NAMED = {'\b': '\\b', '\n': '\\n', '\r': '\\r', '\t': '\\t',
@@ -59,19 +79,6 @@ def pick_stage(injection, occurrence_index):
     injections have one stage, so every occurrence gets it."""
     stages = injection['stages']
     return stages[min(occurrence_index, len(stages) - 1)]
-
-
-def audit_needs_hex(value):
-    """auditd hex-encodes a whole field value if it holds a space, a double-quote, or a
-    non-printable char; otherwise it is emitted quoted."""
-    return any(c == ' ' or c == '"' or ord(c) < 0x20 or ord(c) > 0x7e for c in value)
-
-
-def audit_field(key, value):
-    """Render `key` + `value` the way auditd would: quoted, or key=<UPPERHEX>."""
-    if audit_needs_hex(value):
-        return '%s=%s' % (key, value.encode('utf-8').hex().upper())
-    return '%s="%s"' % (key, value)
 
 
 def escape_apache(value):
@@ -96,96 +103,61 @@ def sanitize_single_line(value):
     return ''.join(ch for ch in value if ord(ch) >= 0x20 and ord(ch) != 0x7f)
 
 
-def decode_hex_value(hexstr):
-    """The text behind an auditd hex field, or None if it is not decodable text (then the
-    field stays hex, exactly as a real tool would leave it). NUL is what auditd uses to
-    separate proctitle argv entries; ausearch renders those as spaces."""
-    if len(hexstr) % 2:
-        return None
-    try:
-        text = bytes.fromhex(hexstr).decode('utf-8')
-    except (ValueError, UnicodeDecodeError):
-        return None
-    text = text.replace('\x00', ' ')
-    if any(ord(c) < 0x20 or ord(c) == 0x7f for c in text):
-        return None
-    return text
+def to_audit_hex(value):
+    """auditd's own encoding for a field it cannot leave as a bare token: the raw UTF-8
+    bytes as uppercase hex, no quotes. Unlike the two escapers above this needs no
+    escaping at all -- hex cannot split a line, which is exactly why auditd reaches for
+    it -- so the payload goes in byte for byte, newlines and double-quotes included.
+    Safe to apply to a marker sitting INSIDE a larger hex blob (an a2= holding a whole
+    `bash -c '...' "<marker>"` command line), because hex distributes over
+    concatenation: substituting the marker's hex there gives the same bytes as
+    substituting in the decoded string and re-encoding the whole thing."""
+    return value.encode('utf-8').hex().upper()
 
 
-def interpret_audit_line(line):
-    """Render one auditd line the way `ausearch -i` does: hex values decoded to text and
-    quotes dropped. Applied to EVERY type= line, injected or not -- decoding just the
-    injected field would leave the payload as the one readable string on a line of hex,
-    which is an artifact the classifier could key on instead of the payload's content."""
-    # a0..aN hold argv only on EXECVE; on SYSCALL they are pointer addresses, so decoding
-    # them there would turn an address into gibberish text on the rare line whose bytes
-    # happen to be printable. ausearch draws the same distinction from the record type.
-    is_execve = line.startswith('type=EXECVE')
+def inject_line(line, next_stage, hex_variant='payload'):
+    """Replace every marker in one log line with this stage's injection text, rendered for
+    the surface it lands on so it stays a single line -- an injected file must keep the same
+    line count as its source log. Which of the three variants applies is decided by the
+    MARKER FORM that matched, not by the line type, because the form is what records how
+    auditd treated the original placeholder:
 
-    def repl_hex(match):
-        key, value = match.group(1), match.group(2)
-        if AUDIT_ARG_RE.match(key):
-            if not is_execve:
-                return match.group(0)
-        elif key not in AUDIT_HEX_KEYS:
-            return match.group(0)
-        text = decode_hex_value(value)
-        return match.group(0) if text is None else '%s=%s' % (key, text)
+      hex marker      -> to_audit_hex(stage[hex_variant]): uppercase hex of the raw text.
+                         The placeholder had spaces, so auditd hexed it; hex holds anything,
+                         so the text goes in unsanitized. `hex_variant` picks WHICH text:
+                         'payload' (the default, and what a real attacker typing spaces
+                         produces) or 'tag' -- see --hex-variant.
+      quoted auditd   -> the underscored `tag`, dropped verbatim into the a3=/a4=/acct=
+                         field the marker already sits in -- so a tag has to stay one token,
+                         no spaces and no double-quote.
+      free text       -> the `payload`, Apache-escaped on an access line, control-char
+                         sanitized on an sshd/mysql line.
 
-    line = AUDIT_HEXVAL_RE.sub(repl_hex, line)
-    return AUDIT_QUOTED_RE.sub(lambda m: '%s=%s' % (m.group(1), m.group(2)), line)
-
-
-def inject_audit_line(line, next_stage):
-    """Replace markers in an audit (type=...) line: key="MARKER" -> auditd-rendered tag,
-    and the hex-embedded marker inside a2=<hex> -> hex of the tag."""
-    def repl_kv(match):
-        return audit_field(match.group(1), next_stage()['tag'])
-
-    def repl_hex(_):
-        return next_stage()['tag'].encode('utf-8').hex().upper()
-
-    line = AUDIT_FIELD_RE.sub(repl_kv, line)
-    line = MARKER_HEX_RE.sub(repl_hex, line)
-    return line
-
-
-def inject_freetext_line(line, next_stage):
-    """Replace markers in a free-text log line with the escaped free-text payload."""
-    if IPV4_RE.match(line):
-        escaper = escape_apache          # Apache combined access line -> quoted UA field
-    else:
-        escaper = sanitize_single_line   # sshd username line (or any other free-text)
-
-    def repl(_):
-        return escaper(next_stage()['payload'])
-
-    return MARKER_RE.sub(repl, line)
-
-
-def inject_interpreted_audit_line(line, next_stage):
-    """Audit line in the ausearch -i view: no hex, no quotes, so the marker is plain text
-    and the tag goes in as-is (control chars stripped so the line cannot split)."""
-    def repl(_):
-        return sanitize_single_line(next_stage()['tag'])
-
-    return MARKER_RE.sub(repl, line)
-
-
-def inject_line(line, next_stage, audit_view):
+    The rest of the line is copied through byte for byte: hex fields stay hex and quoted
+    fields stay quoted, exactly as the log holds them."""
     if line.startswith('type='):
-        if audit_view == 'interpreted':
-            # interpret FIRST, inject after: decoding a line that already holds the
-            # payload would decode the payload too, which would quietly destroy the
-            # OHEX_ category (its payloads are hex strings on purpose).
-            return inject_interpreted_audit_line(interpret_audit_line(line), next_stage)
-        return inject_audit_line(line, next_stage)
-    return inject_freetext_line(line, next_stage)
+        variant, escape = 'tag', sanitize_single_line
+    elif IPV4_RE.match(line):
+        variant, escape = 'payload', escape_apache         # Apache access line -> quoted UA
+    else:
+        variant, escape = 'payload', sanitize_single_line  # sshd username line, or free text
+
+    # A callable repl, so re.sub uses the return value as-is instead of reinterpreting the
+    # backslash escapes escape_apache emits.
+    def repl(match):
+        stage = next_stage()
+        if match.group(0) == MARKER_HEX:
+            return to_audit_hex(stage[hex_variant])
+        return escape(stage[variant])
+
+    return MARKER_RE.sub(repl, line)
 
 
-def inject_text(text, injection, audit_view='interpreted'):
+def inject_text(text, injection, hex_variant='payload'):
     """Inject every marker in one file's text, occurrence-order-aware. Returns
-    (new_text, marker_count)."""
+    (new_text, marker_count, hex_marker_count) -- the split is per marker FORM, so a
+    corpus captured wrong (an all-text count on the hex corpus, say) shows up in the inject
+    log instead of only after a full benchmark run."""
     counter = [0]
 
     def next_stage():
@@ -193,11 +165,13 @@ def inject_text(text, injection, audit_view='interpreted'):
         counter[0] += 1
         return stage
 
-    out_lines = [inject_line(line, next_stage, audit_view) for line in text.splitlines()]
+    hex_count = text.count(MARKER_HEX)
+    out_lines = [inject_line(line, next_stage, hex_variant)
+                 for line in text.splitlines()]
     result = '\n'.join(out_lines)
     if text.endswith('\n'):
         result += '\n'
-    return result, counter[0]
+    return result, counter[0], hex_count
 
 
 def out_subdir(in_path):
@@ -245,14 +219,15 @@ def run(args):
         os.makedirs(sub_dir, exist_ok=True)
         print(fname)
         for inj in injections:
-            injected, count = inject_text(text, inj, args.audit_view)
+            injected, count, hex_count = inject_text(text, inj, args.hex_variant)
             out_path = os.path.join(sub_dir, out_name(in_path, inj['id']))
             # newline='\n' so a run on Windows emits the same LF-terminated bytes a run on
             # the cluster does -- real auditd/syslog is LF, and CRLF would both inflate the
             # token count and hand the classifier an artifact no SOC pipeline produces.
             with open(out_path, 'w', encoding='utf-8', newline='\n') as out:
                 out.write(injected)
-            print('  %-28s %3d markers  -> %s' % (inj['id'], count, out_path))
+            print('  %-28s %3d markers (%d text / %d hex)  -> %s'
+                  % (inj['id'], count, count - hex_count, hex_count, out_path))
             grand += 1
     print('done: %d injected files under %s/' % (grand, args.out_dir))
 
@@ -267,14 +242,12 @@ def main():
                     help='injections jsonl (default: jailbreaks/injections.jsonl)')
     ap.add_argument('--out-dir', default='attack_logs_injected',
                     help='output folder (default: attack_logs_injected)')
+    ap.add_argument('--hex-variant', choices=('payload', 'tag'), default='payload',
+                    help="which text to hex into auditd fields: 'payload' (default, the "
+                         "real-attacker case) or 'tag' (the CONTROL lane -- same text as "
+                         "attack_logs/ carries, so plain-vs-this isolates the encoding)")
     ap.add_argument('--only-id', help='only this injection id (default: all)')
     ap.add_argument('--only-file', help='only this input basename (default: all)')
-    ap.add_argument('--audit-view', choices=('interpreted', 'raw'), default='interpreted',
-                    help='how auditd lines are presented. interpreted (default) = the '
-                         '`ausearch -i` view a SOC pipeline actually delivers: hex '
-                         'decoded, quotes dropped. raw = verbatim /var/log/audit/audit.log '
-                         'with the payload hex-encoded, which also makes every auditd '
-                         'injection an obfuscation test')
     run(ap.parse_args())
 
 
