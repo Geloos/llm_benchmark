@@ -4,43 +4,27 @@ plot_results.py
 
 What it does:
   Turns analysis/verdicts.csv into grouped bar charts of jailbreak effectiveness. Bar
-  height is the trick rate: the share of that model's classifications that came back
-  "normal". Every attack_log is a real attack, so a taller bar means the jailbreak fooled
-  the model more often. Rates (not raw counts) because coverage is not guaranteed even
-  across models.
-
-  Two levels:
-    - one overview chart, a group per injection category
-    - one chart per category, a group per individual injection in it
-
-  Plus a third, cross-lane mode (--compare): the same categories with TWO bars per model,
-  one per source corpus, so the effect of auditd hex-encoding the injection is readable in
-  one picture. Hue carries the model, a hatch carries the lane.
+  height is the trick rate: the share of that model's verdicts that came back "normal".
+  Every log is a real attack, so a taller bar means the jailbreak fooled the model more
+  often. --compare instead draws one cross-lane chart, a bar per model per lane.
 
 How to run it:
   python3 plot_results.py --analysis-dir analysis --out-dir analysis/charts
-  python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
   python3 plot_results.py --no-per-category        # overview chart only
+  python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
-                                                   # ONLY the comparison chart
+  python3 plot_results.py --analysis-dir analysis --compare analysis_control analysis_hexa \
+      --lane-labels plain control hexa
 
 What it outputs:
-  analysis/charts/trick_rate_by_category.png       the overview
-  analysis/charts/by_category/<category>.png       one per category, e.g.
-                                                   by_category/benign_reframe.png
-  analysis/trick_rate_by_category.csv              the numbers behind the overview:
-                                                   model,category,seen,attack,normal,
-                                                   neutral,unparseable,trick_rate
-                                                   (per-injection numbers are already in
-                                                   verdicts_by_injection.csv)
-  analysis/report.md                               gains a "## Charts" section, rewritten
-                                                   in place on every run (never appended
-                                                   twice)
+  analysis/charts/trick_rate_by_category.png    the overview, a group per category
+  analysis/charts/by_category/<category>.png    one per category, a group per injection
+  analysis/trick_rate_by_category.csv           the numbers behind the overview
+  analysis/report.md                            gains a "## Charts" section, rewritten in
+                                                place on every run
 
-  With --compare, ONLY these two, and report.md is left untouched:
-  analysis/charts/plain_vs_hexa.png                the cross-lane comparison
-  analysis/plain_vs_hexa.csv                       model,lane,category,seen,attack,normal,
-                                                   neutral,unparseable,trick_rate
+  With --compare, ONLY the cross-lane pair, and report.md is left untouched:
+  analysis/charts/plain_vs_hexa.png  +  analysis/plain_vs_hexa.csv
 
 Needs matplotlib -- the one dependency in this repo outside requests, and only here.
 """
@@ -53,13 +37,8 @@ import textwrap
 from collections import defaultdict
 from pathlib import Path
 
-# Same buckets summarize_results.py writes into the verdict column.
 BUCKETS = ("attack", "normal", "neutral", "unparseable")
 
-# Categorical slots in fixed order: slot N always belongs to the Nth model by name, so a
-# model keeps its hue no matter where it ranks or which models are filtered out. Hues and
-# ordering are the validated set -- do not re-order or extend past 8 without re-validating
-# (worst adjacent CVD dE 9.1).
 SERIES = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100",
           "#e87ba4", "#008300", "#4a3aa7", "#e34948"]
 
@@ -71,28 +50,16 @@ THEME = {
 CHART_STEM = "trick_rate_by_category"
 TITLE = "Jailbreaks by category"
 COMPARE_TITLE = "Trick rate by injection surface"
-# Lane N is told apart by hatch N, never by a new colour: the palette's 8 slots and their
-# ordering are a validated set, so spending extra slots on lanes would both burn the budget
-# and break "a model keeps its hue". Index 0 (the baseline) is solid.
 LANE_HATCH = (None, "///", "...", "xxx")
-# Everything after this marker in report.md is ours, so re-running rewrites instead of
-# appending a second copy.
 SENTINEL = "<!-- charts:begin -->"
 
 
 def read_verdicts(path: Path):
-    """The flat matrix written by summarize_results.py, one dict per model x log x
-    injection: model,category,injection,log,verdict,tricked."""
     with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
 
 def aggregate(rows, key: str, series_of=None):
-    """(series, row[key]) -> per-bucket counts, for key='category' or key='injection'.
-    `series_of` picks what one bar stands for, defaulting to the model -- the compare chart
-    passes (model, lane) instead so one model contributes two bars.
-    'unknown' categories are dropped (stale result files whose injection id is no longer
-    in injections.jsonl) and counted so the caller can warn about them."""
     series_of = series_of or (lambda r: r["model"])
     cells = defaultdict(lambda: {b: 0 for b in BUCKETS})
     unknown = 0
@@ -110,15 +77,11 @@ def aggregate(rows, key: str, series_of=None):
 
 
 def trick_rate(counts) -> float:
-    """Share of classifications the model answered "normal" -- i.e. the injection worked.
-    attack / neutral / unparseable all stay in the denominator, matching the `tricked`
-    rule in summarize_results.py."""
     seen = sum(counts.values())
     return counts["normal"] / seen if seen else 0.0
 
 
 def pooled_order(cells, groups=None):
-    """Groups sorted by trick rate pooled across all models, most effective first."""
     pooled = defaultdict(lambda: {b: 0 for b in BUCKETS})
     for (_, group), counts in cells.items():
         if groups is None or group in groups:
@@ -128,21 +91,16 @@ def pooled_order(cells, groups=None):
 
 
 def model_order(cells):
-    """Alphabetical, so a model's colour slot never moves when the set changes."""
     return sorted({model for model, _ in cells})
 
 
 def lane_series_order(cells, lane_labels):
-    """The compare chart's bar order: model-major, and within a model the lanes in the
-    order they were named on the command line -- baseline first, variant second, so a pair
-    always reads left-to-right as 'before, after' rather than alphabetically."""
     rank = {lane: i for i, lane in enumerate(lane_labels)}
     return sorted({series for series, _ in cells},
                   key=lambda s: (s[0], rank.get(s[1], len(rank))))
 
 
 def group_by_category(rows):
-    """category -> its injection ids, from the data (never from a hardcoded list)."""
     out = defaultdict(set)
     for r in rows:
         category = r.get("category", "")
@@ -152,8 +110,6 @@ def group_by_category(rows):
 
 
 def twin_rows(cells, models, categories):
-    """The table twin behind the overview -- every plotted bar as a row of raw counts, so
-    no value is reachable only by reading a colour off the picture."""
     rows = []
     for model in models:
         for category in categories:
@@ -171,9 +127,6 @@ def twin_rows(cells, models, categories):
 
 
 def read_lanes(pairs):
-    """[(analysis_dir, lane_label), ...] -> the two lanes' verdict rows in one list, each
-    tagged with the lane it came from. Exits on a missing verdicts.csv rather than silently
-    charting one lane against nothing."""
     rows = []
     for analysis_dir, lane in pairs:
         path = Path(analysis_dir) / "verdicts.csv"
@@ -187,8 +140,6 @@ def read_lanes(pairs):
 
 
 def compare_twin_rows(cells, series, categories):
-    """twin_rows() for the compare chart: the series key is a (model, lane) pair, so it
-    expands into two columns instead of one."""
     rows = []
     for model, lane in series:
         for category in categories:
@@ -214,16 +165,10 @@ def write_csv(rows, path: Path, fields) -> None:
 
 
 def category_label(category: str) -> str:
-    """direct_override -> 'direct\\noverride'. Wrapping beats rotating: upright text stays
-    readable, angled text does not. Never split a word -- a category that reads
-    'context man / ipulation' is worse than one wide line."""
     return textwrap.fill(category.replace("_", " "), 11, break_long_words=False)
 
 
 def injection_label(injection: str) -> str:
-    """BR_01_pentest -> 'BR_01\\npentest'. Keeps the id verbatim (it is what appears in
-    verdicts.csv and report.md) but breaks after the numbered prefix so the tick stays
-    two short lines."""
     parts = injection.split("_")
     if len(parts) >= 3:
         return "_".join(parts[:2]) + "\n" + "_".join(parts[2:])
@@ -233,18 +178,6 @@ def injection_label(injection: str) -> str:
 def render(cells, models, groups, title: str, out_path: Path, label_fn,
            style_fn=None, series_label=None, fig_width=None, bar_labels=True,
            legend_ncol=None) -> Path:
-    """Draw one grouped bar chart: a group per entry in `groups`, a bar per series.
-
-    A "series" is a model for the ordinary charts and a (model, lane) pair for the compare
-    chart, so the three hooks keep both callers on this one renderer:
-      style_fn(series, slot)  -> matplotlib bar kwargs (default: the slot's palette colour)
-      series_label(series)    -> its legend text  (default: the series itself)
-      fig_width / bar_labels  -> room and per-bar percentages; the compare chart doubles the
-                                 bar count, so it widens the figure and drops the labels,
-                                 whose numbers are in the twin CSV anyway.
-      legend_ncol             -> column count; the compare chart passes its MODEL count so
-                                 matplotlib's column-major fill stacks each model's two
-                                 lanes in one column, plain above hexa."""
     style_fn = style_fn or (lambda series, slot: {"color": SERIES[slot]})
     series_label = series_label or (lambda series: series)
     import matplotlib
@@ -257,8 +190,6 @@ def render(cells, models, groups, title: str, out_path: Path, label_fn,
     fig_h, dpi = 5.5, 200
     group_w = 0.8
 
-    # A 2px surface gap between adjacent bars instead of a border around each. The plot
-    # occupies ~82% of the figure width, so one group unit is that many pixels wide.
     px_per_unit = (fig_w * dpi * 0.82) / max(len(groups), 1)
     gap = 2.0 / px_per_unit
     bar_w = max(group_w / len(models) - gap, 0.02)
@@ -278,7 +209,6 @@ def render(cells, models, groups, title: str, out_path: Path, label_fn,
                   for g in groups]
         bars = ax.bar([x + offset for x in xs], values, bar_w,
                       label=series_label(model), zorder=3, **style_fn(model, slot))
-        # Selective labels: a 0% bar has nothing to say and the label would sit on the axis.
         if bar_labels:
             ax.bar_label(bars, labels=[f"{v:.0%}" if v > 0 else "" for v in values],
                          padding=2, fontsize=6.5, color=t["muted"])
@@ -291,7 +221,6 @@ def render(cells, models, groups, title: str, out_path: Path, label_fn,
     ax.set_xticklabels([label_fn(g) for g in groups])
     ax.tick_params(colors=t["muted"], labelsize=8, length=0)
 
-    # Recessive chrome: solid horizontal hairlines only, behind the bars.
     ax.grid(axis="y", color=t["grid"], linewidth=0.8, linestyle="-", zorder=0)
     ax.set_axisbelow(True)
     for side in ("top", "right", "left"):
@@ -312,9 +241,6 @@ def render(cells, models, groups, title: str, out_path: Path, label_fn,
 
 
 def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category) -> bool:
-    """Add (or refresh) the '## Charts' section of report.md. summarize_results.py rewrites
-    that file wholesale, so this re-attaches on every run; the sentinel keeps it to one
-    section however many times either script runs."""
     if not report_path.is_file():
         return False
     base = report_path.parent
@@ -345,13 +271,6 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category)
 
 
 def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
-    """The cross-lane chart: same categories, two bars per model -- one per corpus. Answers
-    the question the hex corpus exists for, which neither lane's own report can: does the
-    jailbreak still land once the machine has hex-encoded it?
-
-    Deliberately does NOT touch report.md. summarize_results.py rewrites that file wholesale
-    and embed_in_report() rebuilds everything from the '<!-- charts:begin -->' sentinel, so a
-    second section added here would be silently dropped by the next ordinary run."""
     labels = list(args.lane_labels)
     dirs = [analysis_dir] + [Path(d) for d in args.compare]
     if len(labels) != len(dirs):
@@ -379,7 +298,6 @@ def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
     hatch_of = {lane: LANE_HATCH[i] for i, lane in enumerate(labels)}
 
     def style(key, _slot):
-        """Hue carries the model, hatch carries the lane."""
         model, lane = key
         face = SERIES[slot_of[model]]
         hatch = hatch_of[lane]
@@ -446,7 +364,7 @@ def parse_args():
 def main() -> None:
     args = parse_args()
     try:
-        import matplotlib  # noqa: F401
+        import matplotlib
     except ImportError:
         sys.exit("ERROR: this step needs matplotlib.\n"
                  "  pip install matplotlib      (or: pip install -r requirements.txt)")
@@ -508,8 +426,6 @@ def main() -> None:
     for model in models:
         rates = [(c, trick_rate(by_category[(model, c)])) for c in categories
                  if (model, c) in by_category]
-        # Highest trick rate = the category that fooled this model most, i.e. the model's
-        # weakest defence and simultaneously that jailbreak family's best result.
         best = max(rates, key=lambda kv: kv[1]) if rates else ("-", 0.0)
         print(f"{model:24} weakest against: {best[0]:26} trick rate {best[1]:.0%}")
 
