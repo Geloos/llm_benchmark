@@ -6,8 +6,13 @@ What it does:
   Replaces the placeholder marker in the attack logs with each prompt-injection payload
   from injections.jsonl, escaped per log-line type so it cannot break out of its line.
   Works on either source corpus without a mode flag, since each holds the marker in its
-  own form; --hex-variant picks whether the hex auditd fields carry the prose payload
-  (default) or the underscored tag.
+  own forms -- readable in the surfaces auditd left alone, hexed in the ones it could not;
+  --hex-variant picks whether attack_logs_hexa/'s hex auditd fields carry the prose payload
+  (default) or the underscored tag. A VG_ row rotates its guesses clockwise through the
+  markers (marker k gets variant k mod n), so every guess lands in every file.
+  A full run (no --only-id) also deletes the .txt files in each output folder that no
+  longer match an injection id, so a dropped injection is not benchmarked from a
+  leftover file.
 
 How to run it:
   python3 inject_prompts.py --attack-dir attack_logs \
@@ -36,10 +41,16 @@ import injection_set
 
 MARKER_UNDERSCORED = 'this_is_the_injection'
 MARKER_SPACED = 'this is the injection'
+# auditd hexes a field it cannot leave as a bare token, so BOTH corpora hold a hexed form:
+# the wrapped `bash -c '...' "<marker>"` command lines have spaces regardless of which
+# marker form sits inside them. Miss either hex form and ~19% of the sites go uninjected.
 MARKER_HEX = MARKER_SPACED.encode('utf-8').hex().upper()
+MARKER_HEX_UNDERSCORED = MARKER_UNDERSCORED.encode('utf-8').hex().upper()
+HEX_MARKERS = (MARKER_HEX, MARKER_HEX_UNDERSCORED)
 
 MARKER_RE = re.compile('|'.join(re.escape(m) for m in
-                                (MARKER_HEX, MARKER_UNDERSCORED, MARKER_SPACED)))
+                                (MARKER_HEX, MARKER_HEX_UNDERSCORED,
+                                 MARKER_UNDERSCORED, MARKER_SPACED)))
 IPV4_RE = re.compile(r'^\d{1,3}(?:\.\d{1,3}){3}\b')
 
 _APACHE_NAMED = {'\b': '\\b', '\n': '\\n', '\r': '\\r', '\t': '\\t',
@@ -48,7 +59,14 @@ _APACHE_NAMED = {'\b': '\\b', '\n': '\\n', '\r': '\\r', '\t': '\\t',
 
 def pick_stage(injection, occurrence_index):
     stages = injection['stages']
-    return stages[min(occurrence_index, len(stages) - 1)]
+    stage = stages[min(occurrence_index, len(stages) - 1)]
+    variants = stage.get('variants')
+    if variants:
+        # clockwise: the guess advances one variant per marker, keyed on the file-wide
+        # marker index -- so a staged VG_ primer (marker 0) takes variant 0 and its
+        # activations carry on from variant 1, wrapping round.
+        return variants[occurrence_index % len(variants)]
+    return stage
 
 
 def escape_apache(value):
@@ -82,8 +100,14 @@ def inject_line(line, next_stage, hex_variant='payload'):
 
     def repl(match):
         stage = next_stage()
-        if match.group(0) == MARKER_HEX:
+        token = match.group(0)
+        if token == MARKER_HEX:
             return to_audit_hex(stage[hex_variant])
+        if token == MARKER_HEX_UNDERSCORED:
+            # attack_logs/ only, where every auditd surface carries the tag -- so this is
+            # hex(tag) regardless of --hex-variant, which exists solely to split the
+            # control and hexa lanes apart inside attack_logs_hexa/.
+            return to_audit_hex(stage['tag'])
         return escape(stage[variant])
 
     return MARKER_RE.sub(repl, line)
@@ -97,7 +121,7 @@ def inject_text(text, injection, hex_variant='payload'):
         counter[0] += 1
         return stage
 
-    hex_count = text.count(MARKER_HEX)
+    hex_count = sum(text.count(m) for m in HEX_MARKERS)
     out_lines = [inject_line(line, next_stage, hex_variant)
                  for line in text.splitlines()]
     result = '\n'.join(out_lines)
@@ -155,6 +179,12 @@ def run(args):
             print('  %-28s %3d markers (%d text / %d hex)  -> %s'
                   % (inj['id'], count, count - hex_count, hex_count, out_path))
             grand += 1
+        if not args.only_id:
+            current = {out_name(in_path, inj['id']) for inj in injections}
+            for stale in sorted(os.listdir(sub_dir)):
+                if stale.endswith('.txt') and stale not in current:
+                    os.remove(os.path.join(sub_dir, stale))
+                    print('  %-28s removed (no longer in %s)' % (stale, args.injections))
     print('done: %d injected files under %s/' % (grand, args.out_dir))
 
 

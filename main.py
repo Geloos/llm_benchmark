@@ -3,8 +3,10 @@
 main.py
 
 What it does:
-  Runs the whole pipeline for one or more lanes: inject -> context preflight ->
-  benchmark -> summarize -> charts, then a cross-lane comparison chart.
+  Runs the whole pipeline for one or more lanes: inject + clean copies -> context
+  preflight, then per temperature: benchmark the clean logs -> benchmark the injected
+  logs -> summarize (with the clean-log pass flag) -> charts, then a cross-lane
+  comparison chart per temperature.
 
 How to run it:
   python main.py                     # the plain corpus (attack_logs/)
@@ -12,6 +14,7 @@ How to run it:
   python main.py --corpus control    # the encoding control (hex of the tag)
   python main.py --corpus both       # plain + hexa, then the comparison chart
   python main.py --corpus all        # plain + control + hexa, three-lane chart
+  python main.py --temperatures 0    # only temperature 0 (default: 0 low medium)
 
   Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
   --skip-summary / --skip-charts / --skip-compare, and they compose. Any extra
@@ -19,9 +22,15 @@ How to run it:
       python main.py --models llama3.1:8b --injections DO_ PH_
 
 What it outputs:
-  Per lane: attack_logs_injected*/, results*/ and analysis*/ (context_check.csv,
-  verdicts.csv, verdicts_by_injection.csv, summary.jsonl, report.md, charts/).
-  Plus the cross-lane chart analysis/charts/<lane labels joined by _vs_>.png.
+  Per lane: attack_logs_injected*/ and attack_logs_clean*/, then one temp_<t>/ folder per
+  temperature under results*/, results_clean*/ and analysis*/ (verdicts.csv,
+  verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_0,
+  charts/), plus analysis*/context_check.csv. And per temperature the cross-lane chart
+  analysis/temp_<t>/charts/<lane labels joined by _vs_>.png.
+
+  Temperatures and the model set per temperature live in scripts/experiment.py: 0 / low /
+  medium = 0.0 / 0.3 / 0.7; gpt-oss runs at low/medium/high reasoning at temperature 0
+  and at medium alone at the other two.
 """
 
 from __future__ import annotations
@@ -33,7 +42,11 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 SCRIPTS = ROOT / "scripts"
+sys.path.insert(0, str(SCRIPTS))
+import experiment  # noqa: E402  (scripts/ is not a package; same import the stages use)
+
 INJECT = SCRIPTS / "inject_prompts.py"
+CLEAN = SCRIPTS / "make_clean_logs.py"
 CHECK = SCRIPTS / "check_context.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
 SUMMARIZE = SCRIPTS / "summarize_results.py"
@@ -42,17 +55,25 @@ CHARTS = SCRIPTS / "plot_results.py"
 CORPORA = {
     "plain": {"attack_dir": "attack_logs",
               "injected": "attack_logs_injected",
+              "clean_dir": "attack_logs_clean",
               "results": "results",
+              "clean_results": "results_clean",
               "analysis": "analysis",
               "hex_variant": "payload"},
     "hexa": {"attack_dir": "attack_logs_hexa",
              "injected": "attack_logs_injected_hexa",
+             "clean_dir": "attack_logs_clean_hexa",
              "results": "results_hexa",
+             "clean_results": "results_clean_hexa",
              "analysis": "analysis_hexa",
              "hex_variant": "payload"},
+    # control shares hexa's clean baseline: same source corpus, and a clean log carries
+    # no injected text for --hex-variant to change
     "control": {"attack_dir": "attack_logs_hexa",
                 "injected": "attack_logs_injected_control",
+                "clean_dir": "attack_logs_clean_hexa",
                 "results": "results_control",
+                "clean_results": "results_clean_hexa",
                 "analysis": "analysis_control",
                 "hex_variant": "tag"},
 }
@@ -83,6 +104,16 @@ def forward_flags(extra_args: list[str], keep: set[str]) -> list[str]:
     return out
 
 
+def drop_flags(extra_args: list[str], drop: set[str]) -> list[str]:
+    out, taking = [], True
+    for token in extra_args:
+        if token.startswith("--"):
+            taking = token.split("=", 1)[0] not in drop
+        if taking:
+            out.append(token)
+    return out
+
+
 def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     paths = CORPORA[lane]
     tag = f"[{lane}] " if labelled else ""
@@ -94,8 +125,13 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
         if rc != 0:
             print(f"\ninject step failed (exit {rc}); not running the benchmark.")
             return rc
+        rc = run_step(f"{tag}STEP 1a clean logs", CLEAN,
+                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["clean_dir"]])
+        if rc != 0:
+            print(f"\nclean-log step failed (exit {rc}); not running the benchmark.")
+            return rc
     else:
-        print(f"\n=== {tag}STEP 1  inject prompts -> skipped ===")
+        print(f"\n=== {tag}STEP 1  inject prompts + clean logs -> skipped ===")
 
     if not args.skip_benchmark and not args.skip_check:
         rc = run_step(f"{tag}STEP 1b context preflight", CHECK,
@@ -110,10 +146,31 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     else:
         print(f"\n=== {tag}STEP 1b context preflight -> skipped ===")
 
+    for temp in args.temperatures:
+        rc = run_temperature(lane, temp, args, benchmark_args, tag)
+        if rc != 0:
+            return rc
+    return 0
+
+
+def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: str) -> int:
+    paths = CORPORA[lane]
+    tag = f"{tag}[temp_{temp}] "
+    temp_args = ["--temperature", temp]
+
     if not args.skip_benchmark:
-        rc = run_step(f"{tag}STEP 2  run benchmark", BENCHMARK,
+        # the clean run holds one clean.txt per log folder, so an injection filter
+        # (--injections DO_) would select nothing there -- drop those flags for it
+        rc = run_step(f"{tag}STEP 2a run benchmark on the clean logs", BENCHMARK,
+                      ["--input-root", paths["clean_dir"],
+                       "--results-root", paths["clean_results"]] + temp_args
+                      + drop_flags(benchmark_args, {"--injections", "--exclude-injections"}))
+        if rc != 0:
+            print(f"\nclean benchmark step failed (exit {rc}).")
+            return rc
+        rc = run_step(f"{tag}STEP 2b run benchmark on the injected logs", BENCHMARK,
                       ["--input-root", paths["injected"],
-                       "--results-root", paths["results"]] + benchmark_args)
+                       "--results-root", paths["results"]] + temp_args + benchmark_args)
         if rc != 0:
             print(f"\nbenchmark step failed (exit {rc}).")
             return rc
@@ -122,7 +179,9 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
 
     if not args.skip_summary:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
-                      ["--results-root", paths["results"], "--out-dir", paths["analysis"]])
+                      ["--results-root", paths["results"],
+                       "--clean-root", paths["clean_results"],
+                       "--out-dir", paths["analysis"]] + temp_args)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
             return rc
@@ -131,7 +190,7 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
 
     if not args.skip_charts:
         rc = run_step(f"{tag}STEP 4  plot charts", CHARTS,
-                      ["--analysis-dir", paths["analysis"]])
+                      ["--analysis-dir", str(experiment.temp_dir(paths["analysis"], temp))])
         if rc != 0:
             print(f"\nchart step failed (exit {rc}).")
             return rc
@@ -143,24 +202,32 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
 
 def run_compare(args) -> int:
     if args.skip_compare:
-        print("\n=== STEP 5  plain vs hexa comparison -> skipped ===")
-        return 0
-
-    have = [lane for lane in LANE_SETS["all"]
-            if (ROOT / CORPORA[lane]["analysis"] / "verdicts.csv").is_file()]
-    if len(have) < 2:
         print("\n=== STEP 5  cross-lane comparison -> skipped ===")
-        missing = [lane for lane in ("plain", "hexa") if lane not in have]
-        print(f"  need two lanes with a verdicts.csv, have {len(have)} -- run "
-              f"{' and '.join(missing)} first "
-              f"(python main.py --corpus {missing[0]})")
         return 0
 
-    baseline, others = have[0], have[1:]
-    return run_step(f"STEP 5  cross-lane comparison ({' vs '.join(have)})", CHARTS,
-                    ["--analysis-dir", CORPORA[baseline]["analysis"],
-                     "--compare", *[CORPORA[lane]["analysis"] for lane in others],
-                     "--lane-labels", *have])
+    for temp in args.temperatures:
+        def analysis(lane):
+            return experiment.temp_dir(CORPORA[lane]["analysis"], temp)
+
+        have = [lane for lane in LANE_SETS["all"]
+                if (ROOT / analysis(lane) / "verdicts.csv").is_file()]
+        if len(have) < 2:
+            print(f"\n=== [temp_{temp}] STEP 5  cross-lane comparison -> skipped ===")
+            missing = [lane for lane in ("plain", "hexa") if lane not in have]
+            print(f"  need two lanes with a verdicts.csv, have {len(have)} -- run "
+                  f"{' and '.join(missing)} first "
+                  f"(python main.py --corpus {missing[0]})")
+            continue
+
+        baseline, others = have[0], have[1:]
+        rc = run_step(f"[temp_{temp}] STEP 5  cross-lane comparison ({' vs '.join(have)})",
+                      CHARTS,
+                      ["--analysis-dir", str(analysis(baseline)),
+                       "--compare", *[str(analysis(lane)) for lane in others],
+                       "--lane-labels", *have])
+        if rc != 0:
+            return rc
+    return 0
 
 
 def main() -> int:
@@ -173,8 +240,12 @@ def main() -> int:
                          "(attack_logs_hexa, auditd fields hex-encoded); control (the same "
                          "hex corpus carrying the plain lane's text, to isolate the "
                          "encoding); both (plain+hexa); all (plain+control+hexa)")
+    ap.add_argument("--temperatures", nargs="+", choices=tuple(experiment.TEMPERATURES),
+                    default=list(experiment.TEMPERATURES),
+                    help="which temperatures to run, each into its own temp_<t>/ folder: "
+                         "0, low, medium = 0.0 / 0.3 / 0.7 (default: all three)")
     ap.add_argument("--skip-inject", action="store_true",
-                    help="skip step 1 (reuse the existing injected corpus)")
+                    help="skip step 1 (reuse the existing injected and clean corpora)")
     ap.add_argument("--skip-check", action="store_true",
                     help="skip the context preflight (step 1b)")
     ap.add_argument("--skip-benchmark", action="store_true",
@@ -184,7 +255,7 @@ def main() -> int:
     ap.add_argument("--skip-charts", action="store_true",
                     help="skip step 4 (do not (re)draw the per-lane charts)")
     ap.add_argument("--skip-compare", action="store_true",
-                    help="skip step 5 (the plain-vs-hexa comparison chart)")
+                    help="skip step 5 (the cross-lane comparison charts)")
     args, benchmark_args = ap.parse_known_args()
 
     lanes = LANE_SETS[args.corpus]

@@ -16,6 +16,9 @@ How to run it:
                                                      # biggest one per folder
   python scripts/check_context.py --list-only        # trained context only, nothing loaded
 
+  A gpt-oss:20b@low/@medium/@high spec is probed once, as gpt-oss:20b: the reasoning level
+  changes the output, not how much of the prompt fits.
+
 What it outputs:
   A per-model table on stdout (log, file, chars, tokens, chars/token, headroom, verdict)
   plus analysis/context_check.csv. Exit code 1 if anything came back TRUNCATED, OVER-MAX
@@ -28,6 +31,7 @@ from pathlib import Path
 
 import requests
 
+import experiment
 import run_benchmark as bench
 
 OUTPUT_RESERVE = 512
@@ -69,11 +73,22 @@ def verdict_for(tokens: int, limit: int) -> str:
     return "OK"
 
 
+def base_models(specs):
+    out = []
+    for spec in specs:
+        base, _ = experiment.parse_model(spec)
+        if base not in out:
+            out.append(base)
+    return out
+
+
 def parse_args():
     ap = argparse.ArgumentParser(description="Prove the models see the whole log.")
     ap.add_argument("--input-root", default="attack_logs_injected")
     ap.add_argument("--out", default="analysis/context_check.csv")
-    ap.add_argument("--models", nargs="*", default=bench.MODELS)
+    ap.add_argument("--models", nargs="*", default=experiment.all_models(),
+                    help="model specs; @reasoning suffixes are folded into one probe per "
+                         "base model (default: every model any temperature runs)")
     ap.add_argument("--logs", nargs="*", default=[],
                     help="only attack folders whose name contains one of these")
     ap.add_argument("--num-ctx", type=int, default=bench.NUM_CTX,
@@ -90,6 +105,7 @@ def parse_args():
 
 def main() -> int:
     args = parse_args()
+    args.models = base_models(args.models)
 
     if args.list_only:
         biggest = max((p.stat().st_size for p in Path(args.input_root).rglob("*.txt")),
@@ -159,7 +175,7 @@ def main() -> int:
             print(f"  {txt.parent.name:30} {txt.stem:26} {len(text):>7} {tokens:>7} "
                   f"{ratio:>5.2f} {limit - tokens:>9}  {v} {note}")
             rows.append({
-                "model": bench.sanitize(model), "trained_context": ctx_max or "",
+                "model": experiment.sanitize(model), "trained_context": ctx_max or "",
                 "log": txt.parent.name, "file": txt.stem, "chars": len(text),
                 "prompt_tokens": tokens, "chars_per_token": round(ratio, 2),
                 "num_ctx": args.num_ctx, "effective_limit": limit,
