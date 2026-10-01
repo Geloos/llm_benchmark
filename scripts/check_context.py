@@ -36,7 +36,7 @@ import run_benchmark as bench
 
 OUTPUT_RESERVE = 512
 
-SHOW_URL = bench.OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/show"
+SHOW_URL = bench.api_url("show")
 
 
 def declared_context(model: str):

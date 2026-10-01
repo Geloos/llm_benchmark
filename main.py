@@ -28,10 +28,18 @@ What it outputs:
   analysis/temp_<t>/charts/<lane labels joined by _vs_>.png.
 
   Temperatures, seeds and the model set per temperature live in scripts/experiment.py:
-  0 / low / medium = 0.0 / 0.3 / 0.7; gpt-oss runs at low/medium/high reasoning at
-  temperature 0 and at medium alone at the other two. Temperature 0 runs once (seed 42);
-  low and medium run 5 times (seeds 42..46, one seed_<n>/ folder each) and are reported
-  as mean +- std. Narrow the seeds with a forwarded --seeds, e.g. python main.py --temperatures low --seeds 42 43 44
+  0 / low / medium = 0.0 / 0.3 / 0.7. Two experiments share the run:
+    main       every temperature x gpt-oss@medium, llama3.1, gemma3, 5 runs each (seeds
+               42..46, one seed_<n>/ folder each), reported as mean +- std;
+    reasoning  temperature 0 x gpt-oss@low / @medium / @high, 1 run (seed 42). @medium's
+               run is the main experiment's first, so only @low and @high are extra.
+  Narrow the
+  seeds with a forwarded --seeds, or change the count with --runs:
+      python main.py --temperatures low --seeds 42 43 44
+      python main.py --temperatures low --runs 10
+
+  The statistics (flip rate, CIs, McNemar) are a separate step, run once every lane and
+  temperature is done: python scripts/stats_analysis.py (see README.md).
 """
 
 from __future__ import annotations
@@ -148,7 +156,7 @@ def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: 
     if not args.skip_summary:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
                       ["--results-root", paths["results"],
-                       "--out-dir", paths["analysis"]] + temp_args)
+                       "--out-dir", paths["analysis"], "--lane", lane] + temp_args)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
             return rc

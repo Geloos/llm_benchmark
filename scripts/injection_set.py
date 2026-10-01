@@ -6,7 +6,8 @@ What it does:
   Loads jailbreaks/injections.jsonl and normalises it into the one shape the rest of the
   pipeline uses, folding the two-stage rows (a primer + its activation) into a single
   injection. Imported by both inject_prompts.py and summarize_results.py so the two agree
-  on what an injection is.
+  on what an injection is. Also holds LABEL_TWINS, the generic -> SPT_ twin pairs that
+  stats_analysis.py compares.
 
   A row either carries one `payload` + `tag`, or -- the VG_ vocabulary-guessing rows -- a
   `variants` list of {guess, payload, tag} plus `"rotate": "clockwise"`: the attacker
@@ -38,6 +39,14 @@ STAGE_WORD_RE = re.compile(r'_(?:primer|activation)(?=_|$)')
 REQUIRED_KEYS = ('id', 'payload', 'tag')
 VARIANT_KEYS = ('guess', 'payload', 'tag')
 ROTATIONS = ('clockwise',)
+
+# generic injection -> its word-for-word SPT_ twin with the real label re-attached, so the
+# gap within a pair isolates knowledge of the system prompt (stats_analysis.py tests it)
+LABEL_TWINS = {
+    'DO_01_canonical': 'SPT_01_direct',
+    'PH_03_relay_role': 'SPT_02_persona',
+    'BR_01_pentest': 'SPT_06_pentest',
+}
 
 
 def read_rows(path):

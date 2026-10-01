@@ -13,6 +13,7 @@ analysis_hexa/
 attack_logs_injected_control/
 results_control/
 analysis_control/
+analysis_stats/
 truncated/
 
 # notebook checkpoints
