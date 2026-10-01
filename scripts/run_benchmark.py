@@ -19,20 +19,25 @@ How to run it:
   # the hex lane
   python run_benchmark.py --input-root attack_logs_injected_hexa --results-root results_hexa
 
-  # temperature 0.3 (writes results/temp_low/), and the clean baseline at temperature 0
+  # temperature 0.3 at seeds 42..46 (writes results/temp_low/seed_<n>/)
   python run_benchmark.py --temperature low
-  python run_benchmark.py --input-root attack_logs_clean --results-root results_clean
+
+  # only some of the repeats, e.g. a first pass at 3 seeds
+  python run_benchmark.py --temperature low --seeds 42 43 44
 
   # one gpt-oss reasoning level: <model>@low|medium|high is sent as think=<level>
   python run_benchmark.py --models gpt-oss:20b@high --injections DO_01_canonical
 
 What it outputs:
-  <results-root>/temp_<t>/<model_sanitized>/results_<attack_folder>/<stem>.txt        raw reply
-  <results-root>/temp_<t>/<model_sanitized>/results_<attack_folder>/<stem>.meta.json  metadata
+  <results-root>/temp_<t>/seed_<n>/<model_sanitized>/results_<attack_folder>/<stem>.txt        raw reply
+  <results-root>/temp_<t>/seed_<n>/<model_sanitized>/results_<attack_folder>/<stem>.meta.json  metadata
 
   --temperature picks t (0 / low / medium = 0.0 / 0.3 / 0.7, see experiment.py) and, unless
   --models is given, the model set: gpt-oss at low/medium/high reasoning at temperature 0,
   gpt-oss at medium alone at the other two, plus llama3.1 and gemma3 everywhere.
+  Unless --seeds is given, it also picks the seeds: 42 alone at temperature 0 (greedy, so
+  a repeat would be a copy), 42..46 at low and medium. Every seed gets its own folder, so
+  the skip-if-exists rule works per seed and a crashed run resumes where it stopped.
 
   The sidecar carries prompt_tokens (the tokens ollama really fed to the model) and
   input_seen. Ollama truncates an over-long prompt in silence, so that count is the only
@@ -41,7 +46,7 @@ What it outputs:
   in the sidecar rather than a .txt, since summarize_results.py reads every *.txt.
 
   A call flagged TRUNCATED also gets its input log (<stem>.input.txt), reply and sidecar
-  COPIED to truncated/<results-root name>/temp_<t>/<model>/results_<log>/ -- the result
+  COPIED to truncated/<results-root name>/temp_<t>/seed_<n>/<model>/results_<log>/ -- the result
   stays in place, and summarize_results.py marks it truncated=1.
 """
 
@@ -59,7 +64,6 @@ import experiment
 OLLAMA_URL  = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/chat")
 NUM_CTX     = 81920
 OUTPUT_RESERVE = 512
-SEED        = 42
 
 SYSTEM_PROMPT = (
     'You are a MITRE ATT&CK TTP classification expert. Your task is to classify '
@@ -103,7 +107,8 @@ def unload(model: str) -> None:
         pass
 
 
-def classify(model: str, log_text: str, num_ctx: int, temperature: float) -> dict:
+def classify(model: str, log_text: str, num_ctx: int, temperature: float,
+             seed: int) -> dict:
     base, think = experiment.parse_model(model)
     body = {
         "model": base,
@@ -114,7 +119,7 @@ def classify(model: str, log_text: str, num_ctx: int, temperature: float) -> dic
         "stream": False,
         "keep_alive": 0,
         "format": "json",
-        "options": {"temperature": temperature, "num_ctx": num_ctx, "seed": SEED},
+        "options": {"temperature": temperature, "num_ctx": num_ctx, "seed": seed},
     }
     if think:
         # only for an explicit @level: llama3.1 and gemma3 reject the think field
@@ -165,6 +170,10 @@ def parse_args():
     ap.add_argument("--temperature", choices=tuple(experiment.TEMPERATURES), default="0",
                     help="0, low or medium (0.0 / 0.3 / 0.7); results go to "
                          "<results-root>/temp_<t>/ (default: 0)")
+    ap.add_argument("--seeds", nargs="+", type=int, default=None,
+                    help="seeds to repeat the run with, one <results-root>/temp_<t>/seed_<n>/ "
+                         "each (default: experiment.seeds_for(temperature) -- 42 at "
+                         "temperature 0, 42..46 at low and medium)")
     ap.add_argument("--models", nargs="*", default=None,
                     help="override the model list; <model>@low|medium|high sets a gpt-oss "
                          "reasoning level (default: experiment.models_for(temperature))")
@@ -178,14 +187,13 @@ def parse_args():
 def main() -> None:
     args = parse_args()
     input_root = Path(args.input_root)
-    results_root = experiment.temp_dir(args.results_root, args.temperature)
-    truncated_root = experiment.temp_dir(
-        Path(args.truncated_root) / Path(args.results_root).name, args.temperature)
     temperature = experiment.TEMPERATURES[args.temperature]
     if args.models is None:
         args.models = experiment.models_for(args.temperature)
     for model in args.models:
         experiment.parse_model(model)          # reject a bad @level before any call
+    if args.seeds is None:
+        args.seeds = list(experiment.seeds_for(args.temperature))
 
     folders = sorted(
         p for p in input_root.iterdir()
@@ -196,14 +204,39 @@ def main() -> None:
                   if wanted_file(t.stem, args.injections, args.exclude_injections))
         for f in folders
     }
-    total = sum(len(v) for v in txt_by_folder.values()) * len(args.models)
-    done = 0
+    total = (sum(len(v) for v in txt_by_folder.values()) * len(args.models)
+             * len(args.seeds))
+    progress = {"done": 0, "total": total}
 
     print(f"models      : {args.models}")
-    print(f"temperature : {args.temperature} ({temperature}) -> {results_root}")
+    print(f"temperature : {args.temperature} ({temperature}) -> "
+          f"{experiment.temp_dir(args.results_root, args.temperature)}")
+    print(f"seeds       : {args.seeds}")
     print(f"num_ctx     : {args.num_ctx}")
     print(f"folders ({len(folders)}): {[f.name for f in folders]}")
     print(f"files/folder: {[len(v) for v in txt_by_folder.values()]}  total calls: {total}\n")
+
+    suspect = []
+    for seed in args.seeds:
+        suspect += run_seed(args, seed, temperature, txt_by_folder, progress)
+
+    if suspect:
+        print(f"\n*** {len(suspect)} call(s) hit the context limit -- ollama truncated the "
+              f"prompt, so those verdicts are not about the whole log: ***")
+        for line in suspect[:20]:
+            print(f"  {line}")
+        if len(suspect) > 20:
+            print(f"  ... and {len(suspect) - 20} more (grep "
+                  f"{experiment.temp_dir(args.results_root, args.temperature)}/ for "
+                  f"'\"input_seen\": \"TRUNCATED\"')")
+
+
+def run_seed(args, seed: int, temperature: float, txt_by_folder: dict,
+             progress: dict) -> list:
+    results_root = experiment.seed_dir(args.results_root, args.temperature, seed)
+    truncated_root = experiment.seed_dir(
+        Path(args.truncated_root) / Path(args.results_root).name, args.temperature, seed)
+    print(f"--- seed {seed} -> {results_root}\n")
 
     suspect = []
     for model in args.models:
@@ -212,18 +245,19 @@ def main() -> None:
             out_dir = model_dir / f"results_{folder.name}"
             out_dir.mkdir(parents=True, exist_ok=True)
             for txt in txt_files:
-                done += 1
+                progress["done"] += 1
+                done, total = progress["done"], progress["total"]
                 out_path = out_dir / f"{txt.stem}.txt"
                 if out_path.exists():
-                    print(f"[{done}/{total}] {model:22} {folder.name}/{txt.name} -> skip")
+                    print(f"[{done}/{total}] s{seed} {model:22} {folder.name}/{txt.name} -> skip")
                     continue
                 log_text = txt.read_text(encoding="utf-8", errors="replace")
                 meta = {"model": model, "log": folder.name, "injection": txt.stem,
-                        "temperature": temperature, "seed": SEED,
+                        "temperature": temperature, "seed": seed,
                         "think": experiment.parse_model(model)[1],
                         "num_ctx": args.num_ctx, "input_chars": len(log_text)}
                 try:
-                    data = classify(model, log_text, args.num_ctx, temperature)
+                    data = classify(model, log_text, args.num_ctx, temperature, seed)
                     raw = data["message"]["content"]
                     if data["message"].get("thinking"):
                         meta["thinking"] = data["message"]["thinking"]
@@ -239,7 +273,7 @@ def main() -> None:
                     status = (f"ok  tok={prompt_tokens}/{args.num_ctx} "
                               f"[{meta['input_seen']}]")
                     if meta["input_seen"] not in ("ok", "unknown"):
-                        suspect.append(f"{model} {folder.name}/{txt.stem} "
+                        suspect.append(f"seed {seed} {model} {folder.name}/{txt.stem} "
                                        f"{prompt_tokens}/{args.num_ctx}")
                 except Exception as e:
                     out_path.write_text(json.dumps({"error": str(e)}), encoding="utf-8")
@@ -251,18 +285,10 @@ def main() -> None:
                     kept = keep_truncated(truncated_root / experiment.sanitize(model)
                                           / f"results_{folder.name}", txt, out_path, meta_path)
                     status += f"  -> copied to {kept}"
-                print(f"[{done}/{total}] {model:22} {folder.name}/{txt.name} -> {status}")
+                print(f"[{done}/{total}] s{seed} {model:22} {folder.name}/{txt.name} -> {status}")
         unload(model)
         print(f"unloaded {model}\n")
-
-    if suspect:
-        print(f"\n*** {len(suspect)} call(s) hit the context limit -- ollama truncated the "
-              f"prompt, so those verdicts are not about the whole log: ***")
-        for line in suspect[:20]:
-            print(f"  {line}")
-        if len(suspect) > 20:
-            print(f"  ... and {len(suspect) - 20} more (grep {results_root}/ for '\"input_seen\": "
-                  f"\"TRUNCATED\"')")
+    return suspect
 
 
 if __name__ == "__main__":

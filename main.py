@@ -3,9 +3,8 @@
 main.py
 
 What it does:
-  Runs the whole pipeline for one or more lanes: inject + clean copies -> context
-  preflight, then per temperature: benchmark the clean logs -> benchmark the injected
-  logs -> summarize (with the clean-log pass flag) -> charts, then a cross-lane
+  Runs the whole pipeline for one or more lanes: inject -> context preflight, then per
+  temperature: benchmark the injected logs -> summarize -> charts, then a cross-lane
   comparison chart per temperature.
 
 How to run it:
@@ -22,15 +21,17 @@ How to run it:
       python main.py --models llama3.1:8b --injections DO_ PH_
 
 What it outputs:
-  Per lane: attack_logs_injected*/ and attack_logs_clean*/, then one temp_<t>/ folder per
-  temperature under results*/, results_clean*/ and analysis*/ (verdicts.csv,
+  Per lane: attack_logs_injected*/, then one temp_<t>/ folder per temperature under
+  results*/ and analysis*/ (verdicts.csv,
   verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_0,
   charts/), plus analysis*/context_check.csv. And per temperature the cross-lane chart
   analysis/temp_<t>/charts/<lane labels joined by _vs_>.png.
 
-  Temperatures and the model set per temperature live in scripts/experiment.py: 0 / low /
-  medium = 0.0 / 0.3 / 0.7; gpt-oss runs at low/medium/high reasoning at temperature 0
-  and at medium alone at the other two.
+  Temperatures, seeds and the model set per temperature live in scripts/experiment.py:
+  0 / low / medium = 0.0 / 0.3 / 0.7; gpt-oss runs at low/medium/high reasoning at
+  temperature 0 and at medium alone at the other two. Temperature 0 runs once (seed 42);
+  low and medium run 5 times (seeds 42..46, one seed_<n>/ folder each) and are reported
+  as mean +- std. Narrow the seeds with a forwarded --seeds, e.g. python main.py --temperatures low --seeds 42 43 44
 """
 
 from __future__ import annotations
@@ -43,10 +44,9 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-import experiment  # noqa: E402  (scripts/ is not a package; same import the stages use)
+import experiment  
 
 INJECT = SCRIPTS / "inject_prompts.py"
-CLEAN = SCRIPTS / "make_clean_logs.py"
 CHECK = SCRIPTS / "check_context.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
 SUMMARIZE = SCRIPTS / "summarize_results.py"
@@ -55,25 +55,17 @@ CHARTS = SCRIPTS / "plot_results.py"
 CORPORA = {
     "plain": {"attack_dir": "attack_logs",
               "injected": "attack_logs_injected",
-              "clean_dir": "attack_logs_clean",
               "results": "results",
-              "clean_results": "results_clean",
               "analysis": "analysis",
               "hex_variant": "payload"},
     "hexa": {"attack_dir": "attack_logs_hexa",
              "injected": "attack_logs_injected_hexa",
-             "clean_dir": "attack_logs_clean_hexa",
              "results": "results_hexa",
-             "clean_results": "results_clean_hexa",
              "analysis": "analysis_hexa",
              "hex_variant": "payload"},
-    # control shares hexa's clean baseline: same source corpus, and a clean log carries
-    # no injected text for --hex-variant to change
     "control": {"attack_dir": "attack_logs_hexa",
                 "injected": "attack_logs_injected_control",
-                "clean_dir": "attack_logs_clean_hexa",
                 "results": "results_control",
-                "clean_results": "results_clean_hexa",
                 "analysis": "analysis_control",
                 "hex_variant": "tag"},
 }
@@ -104,16 +96,6 @@ def forward_flags(extra_args: list[str], keep: set[str]) -> list[str]:
     return out
 
 
-def drop_flags(extra_args: list[str], drop: set[str]) -> list[str]:
-    out, taking = [], True
-    for token in extra_args:
-        if token.startswith("--"):
-            taking = token.split("=", 1)[0] not in drop
-        if taking:
-            out.append(token)
-    return out
-
-
 def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     paths = CORPORA[lane]
     tag = f"[{lane}] " if labelled else ""
@@ -125,13 +107,8 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
         if rc != 0:
             print(f"\ninject step failed (exit {rc}); not running the benchmark.")
             return rc
-        rc = run_step(f"{tag}STEP 1a clean logs", CLEAN,
-                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["clean_dir"]])
-        if rc != 0:
-            print(f"\nclean-log step failed (exit {rc}); not running the benchmark.")
-            return rc
     else:
-        print(f"\n=== {tag}STEP 1  inject prompts + clean logs -> skipped ===")
+        print(f"\n=== {tag}STEP 1  inject prompts -> skipped ===")
 
     if not args.skip_benchmark and not args.skip_check:
         rc = run_step(f"{tag}STEP 1b context preflight", CHECK,
@@ -159,16 +136,7 @@ def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: 
     temp_args = ["--temperature", temp]
 
     if not args.skip_benchmark:
-        # the clean run holds one clean.txt per log folder, so an injection filter
-        # (--injections DO_) would select nothing there -- drop those flags for it
-        rc = run_step(f"{tag}STEP 2a run benchmark on the clean logs", BENCHMARK,
-                      ["--input-root", paths["clean_dir"],
-                       "--results-root", paths["clean_results"]] + temp_args
-                      + drop_flags(benchmark_args, {"--injections", "--exclude-injections"}))
-        if rc != 0:
-            print(f"\nclean benchmark step failed (exit {rc}).")
-            return rc
-        rc = run_step(f"{tag}STEP 2b run benchmark on the injected logs", BENCHMARK,
+        rc = run_step(f"{tag}STEP 2  run benchmark", BENCHMARK,
                       ["--input-root", paths["injected"],
                        "--results-root", paths["results"]] + temp_args + benchmark_args)
         if rc != 0:
@@ -180,7 +148,6 @@ def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: 
     if not args.skip_summary:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
                       ["--results-root", paths["results"],
-                       "--clean-root", paths["clean_results"],
                        "--out-dir", paths["analysis"]] + temp_args)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
@@ -245,7 +212,7 @@ def main() -> int:
                     help="which temperatures to run, each into its own temp_<t>/ folder: "
                          "0, low, medium = 0.0 / 0.3 / 0.7 (default: all three)")
     ap.add_argument("--skip-inject", action="store_true",
-                    help="skip step 1 (reuse the existing injected and clean corpora)")
+                    help="skip step 1 (reuse the existing injected corpus)")
     ap.add_argument("--skip-check", action="store_true",
                     help="skip the context preflight (step 1b)")
     ap.add_argument("--skip-benchmark", action="store_true",

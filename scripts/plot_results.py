@@ -9,6 +9,10 @@ What it does:
   Every log is a real attack, so a taller bar means the jailbreak fooled the model more
   often. --compare instead draws one cross-lane chart, a bar per model per lane.
 
+  When verdicts.csv holds more than one seed (temperatures low and medium), the rate is
+  computed per seed and the bar is the mean across seeds, with a whisker of +-1 sample
+  std, clipped to [0, 1]. A single seed (temperature 0) draws a bare bar.
+
 How to run it:
   python3 plot_results.py --analysis-dir analysis/temp_0     # one temperature's analysis
   python3 plot_results.py --no-per-category        # overview chart only
@@ -33,6 +37,7 @@ Needs matplotlib -- the one dependency in this repo outside requests, and only h
 import argparse
 import csv
 import os
+import statistics
 import sys
 import textwrap
 from collections import defaultdict
@@ -60,26 +65,43 @@ def read_verdicts(path: Path):
         return list(csv.DictReader(fh))
 
 
+def usable(r) -> bool:
+    category = r.get("category", "")
+    return bool(category) and category != "unknown" and r.get("verdict", "") in BUCKETS
+
+
 def aggregate(rows, key: str, series_of=None):
     series_of = series_of or (lambda r: r["model"])
     cells = defaultdict(lambda: {b: 0 for b in BUCKETS})
     unknown = 0
     for r in rows:
-        category = r.get("category", "")
-        if category == "unknown" or not category:
+        if not usable(r):
             unknown += 1
             continue
-        verdict = r.get("verdict", "")
-        if verdict not in BUCKETS:
-            unknown += 1
-            continue
-        cells[(series_of(r), r[key])][verdict] += 1
+        cells[(series_of(r), r[key])][r["verdict"]] += 1
     return cells, unknown
 
 
 def trick_rate(counts) -> float:
     seen = sum(counts.values())
     return (counts["normal"] + counts["neutral"]) / seen if seen else 0.0
+
+
+def seed_stats(rows, key: str, series_of=None):
+    # (series, group) -> (mean, std, seeds): the trick rate per seed, then mean and sample
+    # std across seeds. std is None for one seed. A verdicts.csv without a seed column
+    # (older runs) reads as one seed, so the mean is the plain pooled rate.
+    series_of = series_of or (lambda r: r["model"])
+    by_seed = defaultdict(lambda: defaultdict(lambda: {b: 0 for b in BUCKETS}))
+    for r in rows:
+        if usable(r):
+            by_seed[(series_of(r), r[key])][r.get("seed", "")][r["verdict"]] += 1
+    out = {}
+    for cell, seeds in by_seed.items():
+        rates = [trick_rate(counts) for counts in seeds.values()]
+        std = statistics.stdev(rates) if len(rates) > 1 else None
+        out[cell] = (sum(rates) / len(rates), std, len(rates))
+    return out
 
 
 def pooled_order(cells, groups=None):
@@ -110,7 +132,13 @@ def group_by_category(rows):
     return out
 
 
-def twin_rows(cells, models, categories):
+def rate_fields(stats, cell) -> dict:
+    mean, std, seeds = stats[cell]
+    return {"seeds": seeds, "trick_rate": round(mean, 3),
+            "trick_rate_std": None if std is None else round(std, 3)}
+
+
+def twin_rows(cells, stats, models, categories):
     rows = []
     for model in models:
         for category in categories:
@@ -122,7 +150,7 @@ def twin_rows(cells, models, categories):
                 "category": category,
                 "seen": sum(counts.values()),
                 **{b: counts[b] for b in BUCKETS},
-                "trick_rate": round(trick_rate(counts), 3),
+                **rate_fields(stats, (model, category)),
             })
     return rows
 
@@ -140,7 +168,7 @@ def read_lanes(pairs):
     return rows
 
 
-def compare_twin_rows(cells, series, categories):
+def compare_twin_rows(cells, stats, series, categories):
     rows = []
     for model, lane in series:
         for category in categories:
@@ -153,7 +181,7 @@ def compare_twin_rows(cells, series, categories):
                 "category": category,
                 "seen": sum(counts.values()),
                 **{b: counts[b] for b in BUCKETS},
-                "trick_rate": round(trick_rate(counts), 3),
+                **rate_fields(stats, ((model, lane), category)),
             })
     return rows
 
@@ -176,7 +204,7 @@ def injection_label(injection: str) -> str:
     return injection
 
 
-def render(cells, models, groups, title: str, out_path: Path, label_fn,
+def render(stats, models, groups, title: str, out_path: Path, label_fn,
            style_fn=None, series_label=None, fig_width=None, bar_labels=True,
            legend_ncol=None) -> Path:
     style_fn = style_fn or (lambda series, slot: {"color": SERIES[slot]})
@@ -206,13 +234,28 @@ def render(cells, models, groups, title: str, out_path: Path, label_fn,
     xs = list(range(len(groups)))
     for slot, model in enumerate(models):
         offset = (slot - (len(models) - 1) / 2) * (group_w / len(models))
-        values = [trick_rate(cells[(model, g)]) if (model, g) in cells else 0.0
-                  for g in groups]
-        bars = ax.bar([x + offset for x in xs], values, bar_w,
-                      label=series_label(model), zorder=3, **style_fn(model, slot))
+        bar_xs = [x + offset for x in xs]
+        values = [stats[(model, g)][0] if (model, g) in stats else 0.0 for g in groups]
+        stds = [stats[(model, g)][1] if (model, g) in stats else None for g in groups]
+        ax.bar(bar_xs, values, bar_w,
+               label=series_label(model), zorder=3, **style_fn(model, slot))
+
+        # +-1 std, clipped to the [0, 1] a rate can take
+        lower = [min(s, v) if s is not None else 0.0 for v, s in zip(values, stds)]
+        upper = [min(s, 1 - v) if s is not None else 0.0 for v, s in zip(values, stds)]
+        whisk = [i for i, s in enumerate(stds) if s is not None]
+        if whisk:
+            ax.errorbar([bar_xs[i] for i in whisk], [values[i] for i in whisk],
+                        yerr=[[lower[i] for i in whisk], [upper[i] for i in whisk]],
+                        fmt="none", ecolor=t["secondary"], elinewidth=0.8,
+                        capsize=2, capthick=0.8,
+                        zorder=4)
         if bar_labels:
-            ax.bar_label(bars, labels=[f"{v:.0%}" if v > 0 else "" for v in values],
-                         padding=2, fontsize=6.5, color=t["muted"])
+            for x, v, up in zip(bar_xs, values, upper):
+                if v > 0:
+                    ax.annotate(f"{v:.0%}", (x, v + up), xytext=(0, 2),
+                                textcoords="offset points", ha="center", va="bottom",
+                                fontsize=6.5, color=t["muted"])
 
     ax.set_ylim(0, 1)
     ax.yaxis.set_major_locator(MultipleLocator(0.2))
@@ -258,8 +301,9 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category)
         f"![{TITLE}]({rel(overview)})",
         "",
         f"Bar height is the trick rate: the share of that model's classifications that "
-        f"came back \"Normal\". The counts behind every bar are in "
-        f"[`{rel(twin)}`]({rel(twin)}).",
+        f"came back \"Normal\" or \"Neutral\", averaged over the seeds; the whisker is "
+        f"+-1 std across seeds (none with a single seed). The counts behind every bar "
+        f"are in [`{rel(twin)}`]({rel(twin)}).",
         "",
     ]
     if per_category:
@@ -282,8 +326,9 @@ def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
         sys.exit(f"ERROR: {len(dirs)} lanes but only {len(LANE_HATCH)} hatch patterns.")
     baseline = labels[0]
     rows = read_lanes(list(zip(dirs, labels)))
-    cells, unknown = aggregate(rows, "category",
-                               series_of=lambda r: (r["model"], r["lane"]))
+    lane_series = lambda r: (r["model"], r["lane"])
+    cells, unknown = aggregate(rows, "category", series_of=lane_series)
+    stats = seed_stats(rows, "category", series_of=lane_series)
     if not cells:
         sys.exit(f"ERROR: no usable rows across {analysis_dir} and {args.compare} "
                  f"({unknown} skipped as unknown category / verdict)")
@@ -310,10 +355,11 @@ def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
     stem = "_vs_".join(labels)
     out_dir.mkdir(parents=True, exist_ok=True)
     twin = analysis_dir / f"{stem}.csv"
-    write_csv(compare_twin_rows(cells, series, categories), twin,
-              ["model", "lane", "category", "seen", *BUCKETS, "trick_rate"])
+    write_csv(compare_twin_rows(cells, stats, series, categories), twin,
+              ["model", "lane", "category", "seen", *BUCKETS, "seeds", "trick_rate",
+               "trick_rate_std"])
 
-    image = render(cells, series, categories, COMPARE_TITLE,
+    image = render(stats, series, categories, COMPARE_TITLE,
                    out_dir / f"{stem}.png", category_label,
                    style_fn=style, series_label=lambda k: f"{k[0]} - {k[1]}",
                    fig_width=min(22.0, 9.0 + 2.0 * len(series)), bar_labels=False,
@@ -384,6 +430,7 @@ def main() -> None:
 
     rows = read_verdicts(verdicts)
     by_category, unknown = aggregate(rows, "category")
+    category_stats = seed_stats(rows, "category")
     if not by_category:
         sys.exit(f"ERROR: no usable rows in {verdicts} "
                  f"({unknown} skipped as unknown category / verdict)")
@@ -398,16 +445,18 @@ def main() -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     twin = analysis_dir / f"{CHART_STEM}.csv"
-    write_csv(twin_rows(by_category, models, categories), twin,
-              ["model", "category", "seen", *BUCKETS, "trick_rate"])
+    write_csv(twin_rows(by_category, category_stats, models, categories), twin,
+              ["model", "category", "seen", *BUCKETS, "seeds", "trick_rate",
+               "trick_rate_std"])
 
-    overview = render(by_category, models, categories, TITLE,
+    overview = render(category_stats, models, categories, TITLE,
                       out_dir / f"{CHART_STEM}.png", category_label)
     written = [overview]
 
     per_category = []
     if not args.no_per_category:
         by_injection, _ = aggregate(rows, "injection")
+        injection_stats = seed_stats(rows, "injection")
         members = group_by_category(rows)
         sub_dir = out_dir / "by_category"
         sub_dir.mkdir(parents=True, exist_ok=True)
@@ -415,7 +464,7 @@ def main() -> None:
             injections = pooled_order(by_injection, members[category])
             if not injections:
                 continue
-            image = render(by_injection, models, injections,
+            image = render(injection_stats, models, injections,
                            category.replace("_", " "), sub_dir / f"{category}.png",
                            injection_label)
             per_category.append((category, image))
@@ -425,8 +474,8 @@ def main() -> None:
         print(f"WARNING: skipped {unknown} rows with an unknown category or verdict "
               f"(stale results whose injection id is not in injections.jsonl?)")
     for model in models:
-        rates = [(c, trick_rate(by_category[(model, c)])) for c in categories
-                 if (model, c) in by_category]
+        rates = [(c, category_stats[(model, c)][0]) for c in categories
+                 if (model, c) in category_stats]
         best = max(rates, key=lambda kv: kv[1]) if rates else ("-", 0.0)
         print(f"{model:24} weakest against: {best[0]:26} trick rate {best[1]:.0%}")
 
