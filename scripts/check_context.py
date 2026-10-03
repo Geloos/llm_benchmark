@@ -6,7 +6,10 @@ What it does:
   Preflight for the benchmark: proves every model really reads a whole injected log
   instead of a silently truncated one. Compares each model's trained context length
   against the num_ctx the benchmark asks for, then probes the largest injected file per
-  log folder and reads back the token count ollama actually evaluated.
+  log folder and reads back the token count ollama actually evaluated. While the model is
+  still loaded from its first probe, it reads `ollama ps` (/api/ps) and reports how much
+  of the model sits on the GPU vs the CPU at that num_ctx -- informational only, since CPU
+  offload is allowed; it never fails the preflight.
 
 How to run it:
   python scripts/check_context.py                    # every model, every log folder
@@ -21,7 +24,8 @@ How to run it:
 
 What it outputs:
   A per-model table on stdout (log, file, chars, tokens, chars/token, headroom, verdict)
-  plus analysis/context_check.csv. Exit code 1 if anything came back TRUNCATED, OVER-MAX
+  and GPU/CPU split, plus analysis/context_check.csv (the split in gpu_pct, size_bytes,
+  size_vram_bytes). Exit code 1 if anything came back TRUNCATED, OVER-MAX
   or ERROR, so main.py can stop before wasting a full run.
 """
 
@@ -37,6 +41,7 @@ import run_benchmark as bench
 OUTPUT_RESERVE = 512
 
 SHOW_URL = bench.api_url("show")
+PS_URL = bench.api_url("ps")
 
 
 def declared_context(model: str):
@@ -63,6 +68,22 @@ def probe(model: str, log_text: str, num_ctx: int) -> dict:
     }, timeout=1800)
     resp.raise_for_status()
     return resp.json()
+
+
+def gpu_split(model: str) -> dict:
+    # what `ollama ps` shows for a loaded model: how much of it sits in VRAM. Read right
+    # after a probe, which keeps the model loaded (keep_alive 5m) at the real num_ctx, so
+    # the size includes that window's KV cache. Informational: CPU offload is allowed.
+    try:
+        loaded = requests.get(PS_URL, timeout=30).json().get("models") or []
+    except Exception as e:
+        return {"gpu_pct": "", "size": "", "size_vram": "", "ps_error": str(e)[:60]}
+    entry = next((m for m in loaded if model in (m.get("name"), m.get("model"))), None)
+    if not entry or not entry.get("size"):
+        return {"gpu_pct": "", "size": "", "size_vram": "", "ps_error": "not loaded"}
+    size, vram = int(entry["size"]), int(entry.get("size_vram") or 0)
+    return {"gpu_pct": round(100 * vram / size, 1), "size": size, "size_vram": vram,
+            "ps_error": ""}
 
 
 def verdict_for(tokens: int, limit: int) -> str:
@@ -153,12 +174,15 @@ def main() -> int:
         limit = min(args.num_ctx, ctx_max) if ctx_max else args.num_ctx
         print(f"  {'log':30} {'file':26} {'chars':>7} {'tokens':>7} {'c/t':>5} "
               f"{'headroom':>9}  verdict")
+        split = None
         for txt in targets:
             text = txt.read_text(encoding="utf-8", errors="replace")
             try:
                 data = probe(model, text, args.num_ctx)
                 tokens = int(data.get("prompt_eval_count") or 0)
                 note = ""
+                if split is None:
+                    split = gpu_split(model)
             except Exception as e:
                 tokens, note = 0, str(e)[:60]
 
@@ -181,6 +205,18 @@ def main() -> int:
                 "num_ctx": args.num_ctx, "effective_limit": limit,
                 "headroom": limit - tokens, "verdict": v, "error": note,
             })
+        split = split or {"gpu_pct": "", "size": "", "size_vram": "",
+                          "ps_error": "no successful probe"}
+        if split["gpu_pct"] != "":
+            print(f"  ollama ps: GPU {split['gpu_pct']:g}% / CPU "
+                  f"{100 - split['gpu_pct']:g}%  ({split['size_vram'] / 2**30:.1f} of "
+                  f"{split['size'] / 2**30:.1f} GiB in VRAM at num_ctx={args.num_ctx})")
+        else:
+            print(f"  ollama ps: GPU/CPU split unknown ({split['ps_error']})")
+        for row in rows:
+            if row["model"] == experiment.sanitize(model):
+                row.update(gpu_pct=split["gpu_pct"], size_bytes=split["size"],
+                           size_vram_bytes=split["size_vram"])
         bench.unload(model)
         print()
 

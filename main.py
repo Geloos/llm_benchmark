@@ -13,7 +13,7 @@ How to run it:
   python main.py --corpus control    # the encoding control (hex of the tag)
   python main.py --corpus both       # plain + hexa, then the comparison chart
   python main.py --corpus all        # plain + control + hexa, three-lane chart
-  python main.py --temperatures 0    # only temperature 0 (default: 0 low medium)
+  python main.py --temperatures low  # only level low (default: low medium high)
 
   Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
   --skip-summary / --skip-charts / --skip-compare, and they compose. Any extra
@@ -23,20 +23,22 @@ How to run it:
 What it outputs:
   Per lane: attack_logs_injected*/, then one temp_<t>/ folder per temperature under
   results*/ and analysis*/ (verdicts.csv,
-  verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_0,
+  verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
   charts/), plus analysis*/context_check.csv. And per temperature the cross-lane chart
   analysis/temp_<t>/charts/<lane labels joined by _vs_>.png.
 
-  Temperatures, seeds and the model set per temperature live in scripts/experiment.py:
-  0 / low / medium = 0.0 / 0.3 / 0.7. Two experiments share the run:
-    main       every temperature x gpt-oss@medium, llama3.1, gemma3, 5 runs each (seeds
-               42..46, one seed_<n>/ folder each), reported as mean +- std;
-    reasoning  temperature 0 x gpt-oss@low / @medium / @high, 1 run (seed 42). @medium's
-               run is the main experiment's first, so only @low and @high are extra.
+  Sampling, temperatures, seeds and the model set per temperature live in
+  scripts/experiment.py. Every model sends its full recommended sampling; the levels are
+  low / medium / high = 0.0 / recommended / 1.5 x recommended, per model. Two experiments
+  share the run, every series repeated 5 times (seeds 42..46, one seed_<n>/ folder each)
+  and reported as mean +- std:
+    temperature  every level x gpt-oss@low, llama3.1, gemma3;
+    reasoning    medium x gpt-oss@low / @medium / @high. medium x gpt-oss@low is the
+                 temperature experiment's run too, so only @medium and @high are extra.
   Narrow the
   seeds with a forwarded --seeds, or change the count with --runs:
-      python main.py --temperatures low --seeds 42 43 44
-      python main.py --temperatures low --runs 10
+      python main.py --temperatures high --seeds 42 43 44
+      python main.py --temperatures high --runs 10
 
   The statistics (flip rate, CIs, McNemar) are a separate step, run once every lane and
   temperature is done: python scripts/stats_analysis.py (see README.md).
@@ -215,10 +217,11 @@ def main() -> int:
                          "(attack_logs_hexa, auditd fields hex-encoded); control (the same "
                          "hex corpus carrying the plain lane's text, to isolate the "
                          "encoding); both (plain+hexa); all (plain+control+hexa)")
-    ap.add_argument("--temperatures", nargs="+", choices=tuple(experiment.TEMPERATURES),
-                    default=list(experiment.TEMPERATURES),
-                    help="which temperatures to run, each into its own temp_<t>/ folder: "
-                         "0, low, medium = 0.0 / 0.3 / 0.7 (default: all three)")
+    ap.add_argument("--temperatures", nargs="+", choices=experiment.TEMPERATURE_LEVELS,
+                    default=list(experiment.TEMPERATURE_LEVELS),
+                    help="which temperature levels to run, each into its own temp_<t>/ "
+                         "folder: low, medium, high = 0.0 / each model's recommended / "
+                         f"{experiment.HIGH_FACTOR} x recommended (default: all three)")
     ap.add_argument("--skip-inject", action="store_true",
                     help="skip step 1 (reuse the existing injected corpus)")
     ap.add_argument("--skip-check", action="store_true",

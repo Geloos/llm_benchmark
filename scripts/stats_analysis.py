@@ -9,7 +9,10 @@ What it does:
   column (verdict bucket normal or neutral), unchanged.
 
   A cell is (model, lane, temperature, injection, log), and its runs are the seeds
-  (run_idx 1..N). From those cells it computes:
+  (run_idx 1..N). temperature is the level label (low / medium / high), not a number:
+  each level is relative to the model's recommended temperature (experiment.py), so one
+  level holds a different value per model -- asr_aggregate.csv carries both. From those cells it
+  computes:
     a  flip rate          share of cells whose runs do not all agree on success
     b  mean +- std        ASR per run_idx, then mean and sample std (ddof=1) over the runs
     c  collapsed cells    majority vote (mean success > 0.5; a tie, only possible with an
@@ -20,23 +23,35 @@ What it does:
                           keep every injection of each, ASR = mean of per-cell mean
                           success; 95% percentile interval. Every group draws from a fresh
                           generator seeded with --boot-seed, so a group's interval does not
-                          depend on which other groups are present.
-    g  exact McNemar      on majority-vote cells: plain vs control vs hexa (same model,
-                          temperature, injection, log), each generic injection vs its SPT_
-                          twin (injection_set.LABEL_TWINS, same log), and temperature 0 vs
-                          medium (same model, lane, injection, log). Holm-adjusted p within
-                          each file (per scope).
+                          depend on which other groups are present. Drawn per model, per
+                          model x category, and pooled over the models (overall, per
+                          category, per injection). Pooled means the three temperature-
+                          experiment series -- gpt-oss @low, llama3.1, gemma3 -- so
+                          temp_medium's reasoning series do not count gpt-oss three times.
+                          The per-injection pooled ASR is mean success, not d's majority vote.
+    g  paired comparisons which test depends on how many pairs share a log.
+                          Many per log -- plain vs control vs hexa and temperature low vs
+                          medium vs high (same model, matched on injection and log), and
+                          the SPT_ twins pooled over injection_set.LABEL_TWINS (matched on
+                          log): the pairs are clustered, so the log is the unit (Miller
+                          2024). d = mean success b - a per pair, summed per log; the mean
+                          d gets a 95% paired cluster-bootstrap interval (resample logs,
+                          both sides attached) and a cluster sign-flip p (flip the sign of
+                          each log's summed d: exact over all 2^logs flips up to
+                          SIGN_FLIP_EXACT logs, --boot-iters random flips above).
+                          One per log -- a single generic injection vs its SPT_ twin: the
+                          pairs are independent, so exact McNemar on majority-vote cells.
+                          Holm-adjusted p within each file.
   There is no clean-log baseline (f): the clean step was removed from the pipeline.
 
-  The McNemar tests treat their pairs as independent, but pairs from the same log are
-  correlated -- read them alongside the bootstrap interval, which is the
-  cluster-robust number.
+  Every interval and test treats the attack logs as the independent units, and none uses
+  a normal approximation: at 17 logs it is unreliable (Bowyer et al. 2025).
 
 How to run it:
   python scripts/stats_analysis.py                    # every lane and temperature on disk
   python scripts/stats_analysis.py --lane-dirs plain=analysis hexa=analysis_hexa
-  python scripts/stats_analysis.py --drop-truncated --top 15 --boot-iters 20000
-  python scripts/stats_analysis.py --temp-pairs 0:medium 0:low
+  python scripts/stats_analysis.py --drop-truncated --boot-iters 20000
+  python scripts/stats_analysis.py --temp-pairs low:medium low:high
 
 What it outputs (under --out-dir, default analysis_stats/):
   cells.csv                         c: one row per cell
@@ -46,13 +61,16 @@ What it outputs (under --out-dir, default analysis_stats/):
   asr_mean_std_by_injection.csv     b: the same per injection
   injection_ci.csv                  d: majority-vote ASR per injection, Wilson + CP intervals
   asr_bootstrap.csv                 e: aggregate ASR with the cluster-bootstrap interval
-  mcnemar_lanes.csv                 g: encoding pairs
-  mcnemar_spt_twins.csv             g: generic vs label-matched SPT_ twin
-  mcnemar_temperature.csv           g: temperature pairs
-  tables/asr_aggregate.tex          booktabs: mean +- std and bootstrap CI
-  tables/flip_rate.tex              booktabs: flip rate
-  tables/top_injections.tex         booktabs + longtable: top --top injections per group,
-                                    with the Wilson interval
+  asr_aggregate.csv                 b + e side by side per model x lane x temperature,
+                                    with the model's numeric temperature_value
+  asr_bootstrap_pooled.csv          e: the same, pooled over the models
+  asr_bootstrap_by_category.csv     e: per model x category
+  asr_bootstrap_by_category_pooled.csv   e: per category, pooled over the models
+  asr_bootstrap_by_injection_pooled.csv  e: per injection, pooled over the models
+  diff_lanes.csv                    g: encoding pairs, paired cluster bootstrap + sign-flip
+  diff_temperature.csv              g: temperature pairs, the same
+  diff_spt_twins.csv                g: generic vs SPT_ twin pooled over the pairs, the same
+  mcnemar_spt_twins.csv             g: each generic vs its own SPT_ twin, exact McNemar
   and a printed summary of the flip rates, flagging any temperature whose flip rate tops
   --flip-threshold (5%) as one to re-run with 10 runs.
 
@@ -84,7 +102,7 @@ LANE_PAIRS = (("plain", "hexa"), ("plain", "control"), ("control", "hexa"))
 
 GROUP = ["model", "lane", "temperature"]
 CELL = GROUP + ["injection", "log"]
-TEMP_LABEL = {value: label for label, value in experiment.TEMPERATURES.items()}
+TEMP_RANK = {label: i for i, label in enumerate(experiment.TEMPERATURE_LEVELS)}
 
 
 # ---------------------------------------------------------------- loading
@@ -102,7 +120,7 @@ def parse_lane_dirs(items) -> list:
 def load_verdicts(lane_dirs) -> pd.DataFrame:
     frames = []
     for lane, root in lane_dirs:
-        for label, value in experiment.TEMPERATURES.items():
+        for label in experiment.TEMPERATURE_LEVELS:
             path = experiment.temp_dir(root, label) / "verdicts.csv"
             if not path.is_file():
                 continue
@@ -111,9 +129,10 @@ def load_verdicts(lane_dirs) -> pd.DataFrame:
             if "lane" in df.columns and set(df["lane"].dropna()) - {lane}:
                 print(f"WARNING: {path} says lane {sorted(set(df['lane'].dropna()))}, "
                       f"--lane-dirs says {lane!r}; using {lane!r}")
-            # the folder is authoritative; older CSVs have no lane/temperature/run_idx
+            # the folder is authoritative; older CSVs have no lane/temperature/run_idx.
+            # temperature is the level label: the numeric value differs per model
             df["lane"] = lane
-            df["temperature"] = value
+            df["temperature"] = label
             df["run_idx"] = df["seed"].astype(int).map(experiment.run_idx)
             if "truncated" not in df.columns:
                 df["truncated"] = 0
@@ -152,10 +171,14 @@ def clean(df: pd.DataFrame, drop_truncated: bool) -> pd.DataFrame:
 
 def order(df: pd.DataFrame) -> pd.DataFrame:
     lane_rank = {lane: i for i, lane in enumerate(LANES)}
-    return (df.assign(_lane=df["lane"].map(lambda x: lane_rank.get(x, len(LANES))))
-              .sort_values(["model", "_lane", "temperature"]
-                           + [c for c in ("injection", "log", "run_idx") if c in df.columns])
-              .drop(columns="_lane")
+    tail = [c for c in ("injection", "log", "run_idx") if c in df.columns]
+    if "injection" not in df.columns and "category" in df.columns:
+        tail = ["category"] + tail
+    return (df.assign(_lane=df["lane"].map(lambda x: lane_rank.get(x, len(LANES))),
+                      _temp=df["temperature"].map(lambda x: TEMP_RANK.get(x, len(TEMP_RANK))))
+              .sort_values([c for c in ("model",) if c in df.columns] + ["_lane", "_temp"]
+                           + tail)
+              .drop(columns=["_lane", "_temp"])
               .reset_index(drop=True))
 
 
@@ -224,16 +247,27 @@ def injection_ci(cells: pd.DataFrame) -> pd.DataFrame:
     return order(out)
 
 
-def bootstrap(cells: pd.DataFrame, iters: int, seed: int) -> pd.DataFrame:
+def pooled_series(cells: pd.DataFrame) -> pd.DataFrame:
+    # the series the model-pooled intervals average over: one per base model, gpt-oss at
+    # the temperature experiment's reasoning level only -- temp_medium also holds the
+    # reasoning experiment's @medium/@high, which would count gpt-oss three times
+    level = cells["model"].map(experiment.reasoning_level)
+    return cells[level.isna() | (level == experiment.TEMPERATURE_EXPERIMENT_THINK)]
+
+
+def bootstrap(cells: pd.DataFrame, keys: list, iters: int, seed: int) -> pd.DataFrame:
     rows = []
-    for key, g in cells.groupby(GROUP, sort=False):
+    for key, g in cells.groupby(keys, sort=False):
         per_log = g.groupby("log")["mean_success"].agg(["sum", "size"])
         sums, counts = per_log["sum"].to_numpy(), per_log["size"].to_numpy()
         rng = np.random.default_rng(seed)
         idx = rng.integers(0, len(per_log), size=(iters, len(per_log)))
         draws = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
         lo, hi = np.percentile(draws, [2.5, 97.5])
-        rows.append(dict(zip(GROUP, key), logs=len(per_log), cells=len(g),
+        row = dict(zip(keys, key))
+        if "model" not in keys:
+            row["models"] = " ".join(sorted(g["model"].unique()))
+        rows.append(dict(row, logs=len(per_log), cells=len(g),
                          asr=g["mean_success"].mean(), ci_lo=lo, ci_hi=hi,
                          iterations=iters, boot_seed=seed))
     return order(pd.DataFrame(rows))
@@ -241,37 +275,78 @@ def bootstrap(cells: pd.DataFrame, iters: int, seed: int) -> pd.DataFrame:
 
 # ---------------------------------------------------------------- g
 
+# up to this many logs the sign-flip test enumerates every flip (2^17 = 131072 at 17
+# logs); above it, it draws --boot-iters random flips
+SIGN_FLIP_EXACT = 20
+
+
+def discordant(x: np.ndarray, y: np.ndarray) -> dict:
+    # x, y: paired 0/1 majority outcomes; a_only = x only, b_only = y only
+    return {"both": int(((x == 1) & (y == 1)).sum()),
+            "a_only": int(((x == 1) & (y == 0)).sum()),
+            "b_only": int(((x == 0) & (y == 1)).sum()),
+            "neither": int(((x == 0) & (y == 0)).sum())}
+
+
 def mcnemar_row(x: np.ndarray, y: np.ndarray) -> dict:
-    # x, y: paired 0/1 majority outcomes; b = x only, c = y only
-    both = int(((x == 1) & (y == 1)).sum())
-    b = int(((x == 1) & (y == 0)).sum())
-    c = int(((x == 0) & (y == 1)).sum())
-    neither = int(((x == 0) & (y == 0)).sum())
-    p = mcnemar([[both, b], [c, neither]], exact=True).pvalue if len(x) else np.nan
+    counts = discordant(x, y)
+    table = [[counts["both"], counts["a_only"]], [counts["b_only"], counts["neither"]]]
+    p = mcnemar(table, exact=True).pvalue if len(x) else np.nan
     return {"n_pairs": len(x), "asr_a": x.mean() if len(x) else np.nan,
-            "asr_b": y.mean() if len(y) else np.nan,
-            "both": both, "a_only": b, "b_only": c, "neither": neither, "p_exact": p}
+            "asr_b": y.mean() if len(y) else np.nan, **counts, "p_exact": p}
 
 
-def holm(df: pd.DataFrame, by=None) -> pd.DataFrame:
+def sign_flip_p(sums: np.ndarray, iters: int, seed: int) -> tuple:
+    # H0: no difference, so each log's summed d is as likely negative as positive.
+    # p = share of sign assignments whose total lies at least as far from 0 as the observed
+    observed = abs(sums.sum()) - 1e-9
+    n = len(sums)
+    if n <= SIGN_FLIP_EXACT:
+        bits, hits, chunk = np.arange(n), 0, 1 << min(n, 16)
+        for start in range(0, 1 << n, chunk):
+            flips = 1 - 2 * ((np.arange(start, start + chunk)[:, None] >> bits) & 1)
+            hits += int((np.abs(flips @ sums) >= observed).sum())
+        return hits / (1 << n), "exact"
+    flips = np.random.default_rng(seed).choice((-1, 1), size=(iters, n))
+    hits = int((np.abs(flips @ sums) >= observed).sum())
+    return (hits + 1) / (iters + 1), "monte carlo"
+
+
+def diff_row(m: pd.DataFrame, iters: int, seed: int) -> dict:
+    # m: the matched pairs of one comparison, several per log, so the log is the unit
+    # (Miller 2024). d = mean success b - a per pair, summed per log; the bootstrap
+    # resamples logs with both sides attached, the sign-flip test flips each log's sum
+    d = m["mean_success_b"] - m["mean_success_a"]
+    per_log = d.groupby(m["log"]).agg(["sum", "size"])
+    sums, counts = per_log["sum"].to_numpy(), per_log["size"].to_numpy()
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(sums), size=(iters, len(sums)))
+    draws = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    lo, hi = np.percentile(draws, [2.5, 97.5])
+    p, method = sign_flip_p(sums, iters, seed)
+    return {"pairs": len(m), "logs": len(sums),
+            "asr_a": m["mean_success_a"].mean(), "asr_b": m["mean_success_b"].mean(),
+            "diff": d.mean(), "ci_lo": lo, "ci_hi": hi,
+            "excludes_zero": int(lo > 0 or hi < 0),
+            **discordant(m["majority_a"].to_numpy(), m["majority_b"].to_numpy()),
+            "p_signflip": p, "p_method": method, "iterations": iters, "boot_seed": seed}
+
+
+def holm(df: pd.DataFrame, col: str) -> pd.DataFrame:
     df = df.copy()
     df["p_holm"] = np.nan
-    groups = df.groupby(by, sort=False) if by else [(None, df)]
-    for _, g in groups:
-        ok = g["p_exact"].notna()
-        if ok.any():
-            df.loc[g.index[ok], "p_holm"] = multipletests(g.loc[ok, "p_exact"],
-                                                          method="holm")[1]
+    ok = df[col].notna()
+    if ok.any():
+        df.loc[ok, "p_holm"] = multipletests(df.loc[ok, col], method="holm")[1]
     return df
 
 
 def paired(cells: pd.DataFrame, keys: list, a: pd.Series, b: pd.Series, on: list):
-    left = cells[a][keys + on + ["majority"]]
-    right = cells[b][keys + on + ["majority"]]
-    return left.merge(right, on=keys + on, suffixes=("_a", "_b"))
+    cols = keys + on + ["majority", "mean_success"]
+    return cells[a][cols].merge(cells[b][cols], on=keys + on, suffixes=("_a", "_b"))
 
 
-def mcnemar_lanes(cells: pd.DataFrame) -> pd.DataFrame:
+def diff_lanes(cells: pd.DataFrame, iters: int, seed: int) -> pd.DataFrame:
     rows, present = [], set(cells["lane"])
     for lane_a, lane_b in LANE_PAIRS:
         if not {lane_a, lane_b} <= present:
@@ -280,135 +355,80 @@ def mcnemar_lanes(cells: pd.DataFrame) -> pd.DataFrame:
                    cells["lane"] == lane_b, ["injection", "log"])
         for (model, temp), g in m.groupby(["model", "temperature"], sort=True):
             rows.append(dict(model=model, temperature=temp, lane_a=lane_a, lane_b=lane_b,
-                             **mcnemar_row(g["majority_a"].to_numpy(),
-                                           g["majority_b"].to_numpy())))
-    return holm(pd.DataFrame(rows)) if rows else pd.DataFrame()
+                             **diff_row(g, iters, seed)))
+    return holm(pd.DataFrame(rows), "p_signflip") if rows else pd.DataFrame()
 
 
-def mcnemar_twins(cells: pd.DataFrame) -> pd.DataFrame:
+def diff_temps(cells: pd.DataFrame, pairs, iters: int, seed: int) -> pd.DataFrame:
     rows = []
-    pooled = []
+    for label_a, label_b in pairs:
+        m = paired(cells, ["model", "lane"], cells["temperature"] == label_a,
+                   cells["temperature"] == label_b, ["injection", "log"])
+        for (model, lane), g in m.groupby(["model", "lane"], sort=True):
+            rows.append(dict(model=model, lane=lane, temperature_a=label_a,
+                             temperature_b=label_b,
+                             value_a=temp_value(model, label_a),
+                             value_b=temp_value(model, label_b),
+                             **diff_row(g, iters, seed)))
+    return holm(pd.DataFrame(rows), "p_signflip") if rows else pd.DataFrame()
+
+
+def twin_pairs(cells: pd.DataFrame) -> list:
+    # each generic injection matched with its SPT_ twin on log: one pair per log
+    out = []
     for generic, twin in injection_set.LABEL_TWINS.items():
         m = paired(cells, GROUP, cells["injection"] == generic,
                    cells["injection"] == twin, ["log"])
-        if m.empty:
-            continue
-        m["pair"] = f"{generic} vs {twin}"
-        pooled.append(m)
-        for key, g in m.groupby(GROUP, sort=False):
-            rows.append(dict(zip(GROUP, key), scope="pair", generic=generic, twin=twin,
-                             **mcnemar_row(g["majority_a"].to_numpy(),
-                                           g["majority_b"].to_numpy())))
-    if pooled:
-        for key, g in pd.concat(pooled).groupby(GROUP, sort=False):
-            rows.append(dict(zip(GROUP, key), scope="pooled", generic="all generic",
-                             twin="all SPT twins",
-                             **mcnemar_row(g["majority_a"].to_numpy(),
-                                           g["majority_b"].to_numpy())))
-    return order(holm(pd.DataFrame(rows), by="scope")) if rows else pd.DataFrame()
+        if not m.empty:
+            out.append(m.assign(generic=generic, twin=twin))
+    return out
 
 
-def mcnemar_temps(cells: pd.DataFrame, pairs) -> pd.DataFrame:
+def mcnemar_twins(pairs: list) -> pd.DataFrame:
+    # one pair per log, so the pairs are independent and exact McNemar holds
     rows = []
-    for label_a, label_b in pairs:
-        ta, tb = experiment.TEMPERATURES[label_a], experiment.TEMPERATURES[label_b]
-        m = paired(cells, ["model", "lane"], cells["temperature"] == ta,
-                   cells["temperature"] == tb, ["injection", "log"])
-        for (model, lane), g in m.groupby(["model", "lane"], sort=True):
-            rows.append(dict(model=model, lane=lane, temperature_a=ta, temperature_b=tb,
+    for m in pairs:
+        for key, g in m.groupby(GROUP, sort=False):
+            rows.append(dict(zip(GROUP, key), generic=g["generic"].iloc[0],
+                             twin=g["twin"].iloc[0],
                              **mcnemar_row(g["majority_a"].to_numpy(),
                                            g["majority_b"].to_numpy())))
-    return holm(pd.DataFrame(rows)) if rows else pd.DataFrame()
+    return order(holm(pd.DataFrame(rows), "p_exact")) if rows else pd.DataFrame()
 
 
-# ---------------------------------------------------------------- LaTeX
-
-TEX_ESCAPES = {"\\": r"\textbackslash{}", "_": r"\_", "%": r"\%", "&": r"\&", "#": r"\#",
-               "$": r"\$", "{": r"\{", "}": r"\}", "~": r"\textasciitilde{}",
-               "^": r"\textasciicircum{}"}
-
-
-def tex(text) -> str:
-    return "".join(TEX_ESCAPES.get(ch, ch) for ch in str(text))
-
-
-def pct(value, digits=1) -> str:
-    return "--" if pd.isna(value) else f"{100 * value:.{digits}f}"
+def diff_twins(pairs: list, iters: int, seed: int) -> pd.DataFrame:
+    # pooled over the twin pairs: one pair per twin per log, so clustered again
+    if not pairs:
+        return pd.DataFrame()
+    rows = []
+    for key, g in pd.concat(pairs).groupby(GROUP, sort=False):
+        rows.append(dict(zip(GROUP, key), twins=" ".join(sorted(g["twin"].unique())),
+                         **diff_row(g, iters, seed)))
+    return order(holm(pd.DataFrame(rows), "p_signflip"))
 
 
-def temp_tex(value) -> str:
-    return f"{value:g}"
+# ---------------------------------------------------------------- temperature values
+
+def temp_value(model: str, label: str):
+    try:
+        return experiment.temperature_for(model, label)
+    except ValueError:
+        return np.nan
 
 
-def write_tex(path: Path, colspec: str, header: list, body: list, caption: str,
-              label: str, long: bool = False) -> None:
-    head = " & ".join(header) + r" \\"
-    if long:
-        lines = [r"% requires \usepackage{booktabs,longtable}",
-                 r"\begin{longtable}{" + colspec + "}",
-                 r"\caption{" + caption + r"}\label{" + label + r"}\\",
-                 r"\toprule", head, r"\midrule", r"\endfirsthead",
-                 r"\toprule", head, r"\midrule", r"\endhead",
-                 r"\bottomrule", r"\endfoot"]
-        lines += body + [r"\end{longtable}"]
-    else:
-        lines = [r"% requires \usepackage{booktabs}", r"\begin{table}[ht]", r"\centering",
-                 r"\caption{" + caption + "}", r"\label{" + label + "}",
-                 r"\begin{tabular}{" + colspec + "}", r"\toprule", head, r"\midrule"]
-        lines += body + [r"\bottomrule", r"\end{tabular}", r"\end{table}"]
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+def temp_text(model: str, label: str) -> str:
+    # "high (0.9)": the level and this model's value at it
+    value = temp_value(model, label)
+    return label if pd.isna(value) else f"{label} ({value:g})"
 
 
-def group_rows(df: pd.DataFrame, cells_fn) -> list:
-    body, last = [], None
-    for _, r in df.iterrows():
-        if last is not None and r["model"] != last:
-            body.append(r"\midrule")
-        last = r["model"]
-        body.append(" & ".join(cells_fn(r)) + r" \\")
-    return body
-
-
-def tables(out: Path, ms: pd.DataFrame, boot: pd.DataFrame, flips: pd.DataFrame,
-           inj: pd.DataFrame, top: int) -> list:
-    out.mkdir(parents=True, exist_ok=True)
-    agg = order(ms.merge(boot, on=GROUP))
-    write_tex(out / "asr_aggregate.tex", "lllrrr",
-              ["Model", "Encoding", "$T$", "Runs", r"ASR (\%, mean $\pm$ sd)",
-               r"95\% bootstrap CI"],
-              group_rows(agg, lambda r: [
-                  tex(r["model"]), tex(r["lane"]), temp_tex(r["temperature"]),
-                  str(int(r["runs"])),
-                  f"{pct(r['asr_mean'])} $\\pm$ {pct(r['asr_std'])}",
-                  f"[{pct(r['ci_lo'])}, {pct(r['ci_hi'])}]"]),
-              r"Attack success rate per model, encoding and temperature: mean $\pm$ sample "
-              r"sd over runs, and a 95\% cluster-bootstrap interval over attack logs.",
-              "tab:asr-aggregate")
-    write_tex(out / "flip_rate.tex", "lllrrrr",
-              ["Model", "Encoding", "$T$", "Runs", "Cells", "Flipped", r"Flip rate (\%)"],
-              group_rows(flips, lambda r: [
-                  tex(r["model"]), tex(r["lane"]), temp_tex(r["temperature"]),
-                  str(int(r["runs"])), str(int(r["cells"])), str(int(r["flipped"])),
-                  pct(r["flip_rate"])]),
-              "Share of (injection, attack) cells whose repeated runs disagree on success.",
-              "tab:flip-rate")
-    # inj is already in group order; a stable sort inside each group keeps it
-    best = (inj.assign(_group=inj.groupby(GROUP, sort=False).ngroup())
-               .sort_values(["_group", "asr_majority", "mean_success"],
-                            ascending=[True, False, False], kind="mergesort")
-               .groupby("_group", sort=False).head(top))
-    write_tex(out / "top_injections.tex", "llllrrr",
-              ["Model", "Encoding", "$T$", "Injection", "$k/n$", r"ASR (\%)",
-               r"95\% Wilson CI"],
-              group_rows(best, lambda r: [
-                  tex(r["model"]), tex(r["lane"]), temp_tex(r["temperature"]),
-                  tex(r["injection"]), f"{int(r['k_majority'])}/{int(r['logs'])}",
-                  pct(r["asr_majority"]),
-                  f"[{pct(r['wilson_lo'])}, {pct(r['wilson_hi'])}]"]),
-              f"Top {top} injections per model, encoding and temperature by majority-vote "
-              r"ASR over attack logs, with 95\% Wilson intervals.",
-              "tab:top-injections", long=True)
-    return [out / "asr_aggregate.tex", out / "flip_rate.tex", out / "top_injections.tex"]
+def aggregate(ms: pd.DataFrame, boot: pd.DataFrame) -> pd.DataFrame:
+    # b and e side by side per model x lane x temperature, with this model's numeric
+    # temperature at the level
+    out = order(ms.merge(boot, on=GROUP))
+    out.insert(out.columns.get_loc("temperature") + 1, "temperature_value",
+               [temp_value(m, t) for m, t in zip(out["model"], out["temperature"])])
+    return out
 
 
 # ---------------------------------------------------------------- main
@@ -429,15 +449,13 @@ def summary(flips: pd.DataFrame, threshold: float, corpus_lanes: list) -> None:
         return
     worst = rated.loc[rated["flip_rate"].idxmax()]
     print(f"\nmax flip rate: {worst['flip_rate']:.2%} ({worst['model']}, {worst['lane']}, "
-          f"T={worst['temperature']:g})")
+          f"T={temp_text(worst['model'], worst['temperature'])})")
     over = rated[rated["flip_rate"] > threshold]
     if over.empty:
         print(f"every flip rate is at or below {threshold:.0%} -- 5 runs are enough")
         return
-    temps = sorted(over["temperature"].unique())
-    labels = [TEMP_LABEL.get(t, str(t)) for t in temps]
-    print(f"FLAG: flip rate above {threshold:.0%} at T = "
-          f"{', '.join(f'{t:g}' for t in temps)} "
+    labels = sorted(over["temperature"].unique(), key=lambda t: TEMP_RANK.get(t, len(TEMP_RANK)))
+    print(f"FLAG: flip rate above {threshold:.0%} at T = {', '.join(labels)} "
           f"({len(over)} group(s)) -- give those temperatures 10 runs instead of 5:")
     corpus = "all" if len(corpus_lanes) > 1 else corpus_lanes[0]
     print(f"  python main.py --corpus {corpus} --skip-inject --temperatures "
@@ -450,25 +468,25 @@ def parse_args():
                     help="lane=analysis-root pairs; missing roots are skipped "
                          f"(default: {' '.join(DEFAULT_LANE_DIRS)})")
     ap.add_argument("--out-dir", default="analysis_stats",
-                    help="where to write the CSVs and tables/ (default: analysis_stats)")
+                    help="where to write the CSVs (default: analysis_stats)")
     ap.add_argument("--drop-truncated", action="store_true",
                     help="leave out calls ollama truncated (kept by default, as in report.md)")
     ap.add_argument("--boot-iters", type=int, default=10000,
-                    help="cluster-bootstrap iterations (default 10000)")
+                    help="cluster-bootstrap iterations, and random sign flips past "
+                         f"{SIGN_FLIP_EXACT} logs (default 10000)")
     ap.add_argument("--boot-seed", type=int, default=20261001,
                     help="cluster-bootstrap seed (default 20261001)")
-    ap.add_argument("--temp-pairs", nargs="+", default=["0:medium"],
-                    help="temperature pairs to McNemar-test, label:label "
-                         f"(labels: {', '.join(experiment.TEMPERATURES)}; default 0:medium)")
-    ap.add_argument("--top", type=int, default=10,
-                    help="injections per group in tables/top_injections.tex (default 10)")
+    ap.add_argument("--temp-pairs", nargs="+", default=["low:medium", "medium:high"],
+                    help="temperature pairs to compare, label:label "
+                         f"(labels: {', '.join(experiment.TEMPERATURE_LEVELS)}; default "
+                         "low:medium medium:high)")
     ap.add_argument("--flip-threshold", type=float, default=0.05,
                     help="flip rate above which a temperature should get 10 runs "
                          "(default 0.05)")
     args = ap.parse_args()
     args.temp_pairs = [tuple(p.split(":", 1)) for p in args.temp_pairs]
     for pair in args.temp_pairs:
-        if len(pair) != 2 or not set(pair) <= set(experiment.TEMPERATURES):
+        if len(pair) != 2 or not set(pair) <= set(experiment.TEMPERATURE_LEVELS):
             ap.error(f"bad --temp-pairs entry {':'.join(pair)!r}")
     return args
 
@@ -496,7 +514,14 @@ def main() -> None:
     ms = mean_std(per_run)
     ms_inj = mean_std(asr_by_run(df, ["category", "injection"]), ["category", "injection"])
     inj = injection_ci(cells)
-    boot = bootstrap(cells, args.boot_iters, args.boot_seed)
+    boot = bootstrap(cells, GROUP, args.boot_iters, args.boot_seed)
+    pooled = pooled_series(cells)
+    lane_temp = ["lane", "temperature"]
+    boots = (("asr_bootstrap_pooled.csv", pooled, lane_temp),
+             ("asr_bootstrap_by_category.csv", cells, GROUP + ["category"]),
+             ("asr_bootstrap_by_category_pooled.csv", pooled, lane_temp + ["category"]),
+             ("asr_bootstrap_by_injection_pooled.csv", pooled,
+              lane_temp + ["category", "injection"]))
 
     write(cells, out / "cells.csv", written)
     write(flips, out / "flip_rate.csv", written)
@@ -505,14 +530,20 @@ def main() -> None:
     write(ms_inj, out / "asr_mean_std_by_injection.csv", written)
     write(inj, out / "injection_ci.csv", written)
     write(boot, out / "asr_bootstrap.csv", written)
-    for name, table in (("mcnemar_lanes.csv", mcnemar_lanes(cells)),
-                        ("mcnemar_spt_twins.csv", mcnemar_twins(cells)),
-                        ("mcnemar_temperature.csv", mcnemar_temps(cells, args.temp_pairs))):
+    write(aggregate(ms, boot), out / "asr_aggregate.csv", written)
+    for name, subset, keys in boots:
+        write(bootstrap(subset, keys, args.boot_iters, args.boot_seed), out / name, written)
+    iters, seed = args.boot_iters, args.boot_seed
+    twins = twin_pairs(cells)
+    for name, table in (("diff_lanes.csv", diff_lanes(cells, iters, seed)),
+                        ("diff_temperature.csv",
+                         diff_temps(cells, args.temp_pairs, iters, seed)),
+                        ("diff_spt_twins.csv", diff_twins(twins, iters, seed)),
+                        ("mcnemar_spt_twins.csv", mcnemar_twins(twins))):
         if table.empty:
             print(f"note: {name} skipped -- no matching pairs on disk")
             continue
         write(table, out / name, written)
-    written += tables(out / "tables", ms, boot, flips, inj, args.top)
 
     summary(flips, args.flip_threshold, sorted(set(df["lane"])))
     print(f"\nwrote {len(written)} files under {out}/")

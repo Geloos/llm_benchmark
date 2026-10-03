@@ -9,12 +9,12 @@ What it does:
   Every log is a real attack, so a taller bar means the jailbreak fooled the model more
   often. --compare instead draws one cross-lane chart, a bar per model per lane.
 
-  When verdicts.csv holds more than one seed (temperatures low and medium), the rate is
+  When verdicts.csv holds more than one seed (every temperature, 5 by default), the rate is
   computed per seed and the bar is the mean across seeds, with a whisker of +-1 sample
-  std, clipped to [0, 1]. A single seed (temperature 0) draws a bare bar.
+  std, clipped to [0, 1]. A single seed (e.g. a --seeds 42 run) draws a bare bar.
 
 How to run it:
-  python3 plot_results.py --analysis-dir analysis/temp_0     # one temperature's analysis
+  python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
   python3 plot_results.py --no-per-category        # overview chart only
   python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
