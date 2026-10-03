@@ -19,38 +19,42 @@ What it does:
                           even run count, is flagged and counts as 0) and mean success
     d  per-injection CI   k majority successes out of n logs -> 95% Wilson and
                           Clopper-Pearson intervals
-    e  bootstrap CI       cluster bootstrap over logs: resample the logs with replacement,
-                          keep every injection of each, ASR = mean of per-cell mean
-                          success; 95% percentile interval. Every group draws from a fresh
-                          generator seeded with --boot-seed, so a group's interval does not
-                          depend on which other groups are present. Drawn per model, per
-                          model x category, and pooled over the models (overall, per
-                          category, per injection). Pooled means the three temperature-
-                          experiment series -- gpt-oss @low, llama3.1, gemma3 -- so
-                          temp_medium's reasoning series do not count gpt-oss three times.
-                          The per-injection pooled ASR is mean success, not d's majority vote.
+    e  clustered CI       for an ASR pooled over several cells per log, which are then
+                          correlated: Bowyer et al. 2025's clustered Bayesian model on the
+                          majority-vote cells (each log has its own rate around a common
+                          mean theta; Beta-Binomial per log, Beta(1,1) and Gamma(1,1)
+                          priors), 95% credible interval for theta, computed by the
+                          authors' own code (third_party/, copied verbatim) with
+                          --bayes-samples importance samples, seeded per group by
+                          --bayes-seed. Per model, per model x
+                          category, and pooled over the models (overall, per category, per
+                          injection). Pooled means the three temperature-experiment series
+                          -- gpt-oss @low, llama3.1, gemma3 -- so temp_medium's reasoning
+                          series do not count gpt-oss three times.
     g  paired comparisons which test depends on how many pairs share a log.
                           Many per log -- plain vs control vs hexa and temperature low vs
                           medium vs high (same model, matched on injection and log), and
                           the SPT_ twins pooled over injection_set.LABEL_TWINS (matched on
                           log): the pairs are clustered, so the log is the unit (Miller
-                          2024). d = mean success b - a per pair, summed per log; the mean
-                          d gets a 95% paired cluster-bootstrap interval (resample logs,
-                          both sides attached) and a cluster sign-flip p (flip the sign of
-                          each log's summed d: exact over all 2^logs flips up to
-                          SIGN_FLIP_EXACT logs, --boot-iters random flips above).
+                          2024). d = mean success b - a per pair, summed per log; a cluster
+                          sign-flip test (flip the sign of each log's summed d; Canay,
+                          Romano & Shaikh 2017) gives p, exact over all 2^logs flips up to
+                          SIGN_FLIP_EXACT logs and --flip-iters random flips above, and
+                          the same test inverted gives the 95% interval for the mean d.
                           One per log -- a single generic injection vs its SPT_ twin: the
                           pairs are independent, so exact McNemar on majority-vote cells.
                           Holm-adjusted p within each file.
   There is no clean-log baseline (f): the clean step was removed from the pipeline.
 
   Every interval and test treats the attack logs as the independent units, and none uses
-  a normal approximation: at 17 logs it is unreliable (Bowyer et al. 2025).
+  a normal approximation or a bootstrap: at 17 logs both under-cover (Bowyer et al. 2025).
+  The ASR intervals (d, e) are on majority-vote cells, because both methods need 0/1
+  outcomes; asr_mean_std*.csv and the comparisons (g) use mean success.
 
 How to run it:
   python scripts/stats_analysis.py                    # every lane and temperature on disk
   python scripts/stats_analysis.py --lane-dirs plain=analysis hexa=analysis_hexa
-  python scripts/stats_analysis.py --drop-truncated --boot-iters 20000
+  python scripts/stats_analysis.py --drop-truncated
   python scripts/stats_analysis.py --temp-pairs low:medium low:high
 
 What it outputs (under --out-dir, default analysis_stats/):
@@ -60,14 +64,14 @@ What it outputs (under --out-dir, default analysis_stats/):
   asr_mean_std.csv                  b: mean +- std over runs, per model x lane x temperature
   asr_mean_std_by_injection.csv     b: the same per injection
   injection_ci.csv                  d: majority-vote ASR per injection, Wilson + CP intervals
-  asr_bootstrap.csv                 e: aggregate ASR with the cluster-bootstrap interval
+  asr_clustered.csv                 e: ASR per model x lane x temperature, clustered interval
   asr_aggregate.csv                 b + e side by side per model x lane x temperature,
                                     with the model's numeric temperature_value
-  asr_bootstrap_pooled.csv          e: the same, pooled over the models
-  asr_bootstrap_by_category.csv     e: per model x category
-  asr_bootstrap_by_category_pooled.csv   e: per category, pooled over the models
-  asr_bootstrap_by_injection_pooled.csv  e: per injection, pooled over the models
-  diff_lanes.csv                    g: encoding pairs, paired cluster bootstrap + sign-flip
+  asr_clustered_pooled.csv          e: the same, pooled over the models
+  asr_clustered_by_category.csv     e: per model x category
+  asr_clustered_by_category_pooled.csv   e: per category, pooled over the models
+  asr_clustered_by_injection_pooled.csv  e: per injection, pooled over the models
+  diff_lanes.csv                    g: encoding pairs, sign-flip p + inverted-test interval
   diff_temperature.csv              g: temperature pairs, the same
   diff_spt_twins.csv                g: generic vs SPT_ twin pooled over the pairs, the same
   mcnemar_spt_twins.csv             g: each generic vs its own SPT_ twin, exact McNemar
@@ -75,6 +79,9 @@ What it outputs (under --out-dir, default analysis_stats/):
   --flip-threshold (5%) as one to re-run with 10 runs.
 
 Needs pandas, numpy, scipy and statsmodels -- here only; every other stage is stdlib.
+The clustered intervals are the slow part: about 8 s each at the default 1,000,000 importance
+samples, so a full run takes on the order of an hour. --bayes-samples 100000 is ~10x faster
+and noisier.
 """
 
 from __future__ import annotations
@@ -89,6 +96,7 @@ try:
     from statsmodels.stats.contingency_tables import mcnemar
     from statsmodels.stats.multitest import multipletests
     from statsmodels.stats.proportion import proportion_confint
+    from third_party.intervals_clustered import bayes_subtask_credible_interval_IS
 except ImportError as e:
     sys.exit(f"ERROR: {e.name} is not installed -- stats_analysis.py needs pandas, numpy, "
              f"scipy and statsmodels:  pip install -r requirements.txt")
@@ -255,29 +263,39 @@ def pooled_series(cells: pd.DataFrame) -> pd.DataFrame:
     return cells[level.isna() | (level == experiment.TEMPERATURE_EXPERIMENT_THINK)]
 
 
-def bootstrap(cells: pd.DataFrame, keys: list, iters: int, seed: int) -> pd.DataFrame:
+def clustered_interval(k: np.ndarray, n: np.ndarray, samples: int, seed: int) -> tuple:
+    # Bowyer et al. 2025's clustered credible interval, computed by the authors' own code
+    # (third_party/intervals_clustered.py, verbatim): theta ~ Beta(1, 1), d ~ Gamma(1, 1),
+    # each log's successes ~ BetaBinomial(n_t, d theta, d (1 - theta)), importance sampling
+    # from the prior, 95% interval for theta. It takes each log's 0/1 outcomes and draws from
+    # numpy's global generator, so it is seeded per group: a group's interval then does not
+    # depend on which other groups are present
+    data = [np.r_[np.ones(kt), np.zeros(nt - kt)] for kt, nt in zip(k, n)]
+    np.random.seed(seed)
+    lo, hi = bayes_subtask_credible_interval_IS(data, 0.05, num_samples=samples)
+    return lo, hi
+
+
+def asr_clustered(cells: pd.DataFrame, keys: list, samples: int, seed: int) -> pd.DataFrame:
     rows = []
     for key, g in cells.groupby(keys, sort=False):
-        per_log = g.groupby("log")["mean_success"].agg(["sum", "size"])
-        sums, counts = per_log["sum"].to_numpy(), per_log["size"].to_numpy()
-        rng = np.random.default_rng(seed)
-        idx = rng.integers(0, len(per_log), size=(iters, len(per_log)))
-        draws = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
-        lo, hi = np.percentile(draws, [2.5, 97.5])
+        per_log = g.groupby("log")["majority"].agg(["sum", "size"])
+        k, n = per_log["sum"].to_numpy(), per_log["size"].to_numpy()
+        lo, hi = clustered_interval(k, n, samples, seed)
         row = dict(zip(keys, key))
         if "model" not in keys:
             row["models"] = " ".join(sorted(g["model"].unique()))
-        rows.append(dict(row, logs=len(per_log), cells=len(g),
-                         asr=g["mean_success"].mean(), ci_lo=lo, ci_hi=hi,
-                         iterations=iters, boot_seed=seed))
+        rows.append(dict(row, logs=len(per_log), cells=len(g), k_majority=int(k.sum()),
+                         asr_majority=k.sum() / n.sum(), ci_lo=lo, ci_hi=hi,
+                         is_samples=samples, is_seed=seed))
     return order(pd.DataFrame(rows))
 
 
 # ---------------------------------------------------------------- g
 
 # up to this many logs the sign-flip test enumerates every flip (2^17 = 131072 at 17
-# logs); above it, it draws --boot-iters random flips
-SIGN_FLIP_EXACT = 20
+# logs); above it, it draws --flip-iters random flips
+SIGN_FLIP_EXACT = 18
 
 
 def discordant(x: np.ndarray, y: np.ndarray) -> dict:
@@ -296,40 +314,63 @@ def mcnemar_row(x: np.ndarray, y: np.ndarray) -> dict:
             "asr_b": y.mean() if len(y) else np.nan, **counts, "p_exact": p}
 
 
-def sign_flip_p(sums: np.ndarray, iters: int, seed: int) -> tuple:
-    # H0: no difference, so each log's summed d is as likely negative as positive.
-    # p = share of sign assignments whose total lies at least as far from 0 as the observed
-    observed = abs(sums.sum()) - 1e-9
-    n = len(sums)
+def sign_flips(n: int, iters: int, seed: int) -> tuple:
+    # every sign assignment of n logs (exact up to SIGN_FLIP_EXACT), else iters random
+    # ones, in chunks of at most 2^16 rows
     if n <= SIGN_FLIP_EXACT:
-        bits, hits, chunk = np.arange(n), 0, 1 << min(n, 16)
-        for start in range(0, 1 << n, chunk):
-            flips = 1 - 2 * ((np.arange(start, start + chunk)[:, None] >> bits) & 1)
-            hits += int((np.abs(flips @ sums) >= observed).sum())
-        return hits / (1 << n), "exact"
-    flips = np.random.default_rng(seed).choice((-1, 1), size=(iters, n))
-    hits = int((np.abs(flips @ sums) >= observed).sum())
-    return (hits + 1) / (iters + 1), "monte carlo"
+        bits, chunk = np.arange(n), 1 << min(n, 16)
+        return [(1 - 2 * ((np.arange(s, s + chunk)[:, None] >> bits) & 1)).astype(float)
+                for s in range(0, 1 << n, chunk)], True
+    return [np.random.default_rng(seed).choice((-1.0, 1.0), size=(iters, n))], False
+
+
+def flip_p(x: np.ndarray, flips: list, exact: bool) -> float:
+    # H0: each log's summed d is as likely negative as positive (Canay, Romano & Shaikh
+    # 2017). p = share of sign assignments whose total lies at least as far from 0 as x's
+    observed = abs(x.sum()) - 1e-9
+    hits = sum(int((np.abs(f @ x) >= observed).sum()) for f in flips)
+    total = sum(len(f) for f in flips)
+    return hits / total if exact else (hits + 1) / (total + 1)
+
+
+def flip_interval(sums: np.ndarray, counts: np.ndarray, flips: list, exact: bool,
+                  alpha: float = 0.05) -> tuple:
+    # the shifts delta the sign-flip test does not reject, i.e. the test behind p_signflip
+    # inverted: delta is in the interval while the per-log d minus delta could still be
+    # symmetric about 0. Bisected out from the estimate to each side, within [-1, 1]
+    est = sums.sum() / counts.sum()
+
+    def kept(delta):
+        return flip_p(sums - delta * counts, flips, exact) > alpha
+
+    def edge(outer):
+        if kept(outer):
+            return outer
+        inner = est
+        for _ in range(30):
+            mid = (inner + outer) / 2
+            inner, outer = (mid, outer) if kept(mid) else (inner, mid)
+        return inner
+
+    return edge(-1.0), edge(1.0)
 
 
 def diff_row(m: pd.DataFrame, iters: int, seed: int) -> dict:
     # m: the matched pairs of one comparison, several per log, so the log is the unit
-    # (Miller 2024). d = mean success b - a per pair, summed per log; the bootstrap
-    # resamples logs with both sides attached, the sign-flip test flips each log's sum
+    # (Miller 2024). d = mean success b - a per pair, summed per log; the sign-flip test
+    # flips each log's sum, and the interval is that test inverted
     d = m["mean_success_b"] - m["mean_success_a"]
     per_log = d.groupby(m["log"]).agg(["sum", "size"])
-    sums, counts = per_log["sum"].to_numpy(), per_log["size"].to_numpy()
-    rng = np.random.default_rng(seed)
-    idx = rng.integers(0, len(sums), size=(iters, len(sums)))
-    draws = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
-    lo, hi = np.percentile(draws, [2.5, 97.5])
-    p, method = sign_flip_p(sums, iters, seed)
+    sums, counts = per_log["sum"].to_numpy(), per_log["size"].to_numpy(dtype=float)
+    flips, exact = sign_flips(len(sums), iters, seed)
+    lo, hi = flip_interval(sums, counts, flips, exact)
     return {"pairs": len(m), "logs": len(sums),
             "asr_a": m["mean_success_a"].mean(), "asr_b": m["mean_success_b"].mean(),
             "diff": d.mean(), "ci_lo": lo, "ci_hi": hi,
             "excludes_zero": int(lo > 0 or hi < 0),
             **discordant(m["majority_a"].to_numpy(), m["majority_b"].to_numpy()),
-            "p_signflip": p, "p_method": method, "iterations": iters, "boot_seed": seed}
+            "p_signflip": flip_p(sums, flips, exact),
+            "p_method": "exact" if exact else "monte carlo"}
 
 
 def holm(df: pd.DataFrame, col: str) -> pd.DataFrame:
@@ -422,10 +463,10 @@ def temp_text(model: str, label: str) -> str:
     return label if pd.isna(value) else f"{label} ({value:g})"
 
 
-def aggregate(ms: pd.DataFrame, boot: pd.DataFrame) -> pd.DataFrame:
+def aggregate(ms: pd.DataFrame, clustered: pd.DataFrame) -> pd.DataFrame:
     # b and e side by side per model x lane x temperature, with this model's numeric
     # temperature at the level
-    out = order(ms.merge(boot, on=GROUP))
+    out = order(ms.merge(clustered, on=GROUP))
     out.insert(out.columns.get_loc("temperature") + 1, "temperature_value",
                [temp_value(m, t) for m, t in zip(out["model"], out["temperature"])])
     return out
@@ -471,11 +512,17 @@ def parse_args():
                     help="where to write the CSVs (default: analysis_stats)")
     ap.add_argument("--drop-truncated", action="store_true",
                     help="leave out calls ollama truncated (kept by default, as in report.md)")
-    ap.add_argument("--boot-iters", type=int, default=10000,
-                    help="cluster-bootstrap iterations, and random sign flips past "
-                         f"{SIGN_FLIP_EXACT} logs (default 10000)")
-    ap.add_argument("--boot-seed", type=int, default=20261001,
-                    help="cluster-bootstrap seed (default 20261001)")
+    ap.add_argument("--bayes-samples", type=int, default=1_000_000,
+                    help="importance samples per clustered credible interval; the authors' "
+                         "default of 10000 is too noisy on these data (default 1000000)")
+    ap.add_argument("--bayes-seed", type=int, default=20261001,
+                    help="seed for those samples, reset per group (default 20261001)")
+    ap.add_argument("--flip-iters", type=int, default=100000,
+                    help="random sign flips per comparison, used only past "
+                         f"{SIGN_FLIP_EXACT} logs; up to that every flip is enumerated "
+                         "(default 100000)")
+    ap.add_argument("--flip-seed", type=int, default=20261001,
+                    help="seed for those random flips (default 20261001)")
     ap.add_argument("--temp-pairs", nargs="+", default=["low:medium", "medium:high"],
                     help="temperature pairs to compare, label:label "
                          f"(labels: {', '.join(experiment.TEMPERATURE_LEVELS)}; default "
@@ -514,14 +561,16 @@ def main() -> None:
     ms = mean_std(per_run)
     ms_inj = mean_std(asr_by_run(df, ["category", "injection"]), ["category", "injection"])
     inj = injection_ci(cells)
-    boot = bootstrap(cells, GROUP, args.boot_iters, args.boot_seed)
+    bayes = (args.bayes_samples, args.bayes_seed)
+    clustered = asr_clustered(cells, GROUP, *bayes)
     pooled = pooled_series(cells)
     lane_temp = ["lane", "temperature"]
-    boots = (("asr_bootstrap_pooled.csv", pooled, lane_temp),
-             ("asr_bootstrap_by_category.csv", cells, GROUP + ["category"]),
-             ("asr_bootstrap_by_category_pooled.csv", pooled, lane_temp + ["category"]),
-             ("asr_bootstrap_by_injection_pooled.csv", pooled,
-              lane_temp + ["category", "injection"]))
+    more_clustered = (("asr_clustered_pooled.csv", pooled, lane_temp),
+                      ("asr_clustered_by_category.csv", cells, GROUP + ["category"]),
+                      ("asr_clustered_by_category_pooled.csv", pooled,
+                       lane_temp + ["category"]),
+                      ("asr_clustered_by_injection_pooled.csv", pooled,
+                       lane_temp + ["category", "injection"]))
 
     write(cells, out / "cells.csv", written)
     write(flips, out / "flip_rate.csv", written)
@@ -529,11 +578,11 @@ def main() -> None:
     write(ms, out / "asr_mean_std.csv", written)
     write(ms_inj, out / "asr_mean_std_by_injection.csv", written)
     write(inj, out / "injection_ci.csv", written)
-    write(boot, out / "asr_bootstrap.csv", written)
-    write(aggregate(ms, boot), out / "asr_aggregate.csv", written)
-    for name, subset, keys in boots:
-        write(bootstrap(subset, keys, args.boot_iters, args.boot_seed), out / name, written)
-    iters, seed = args.boot_iters, args.boot_seed
+    write(clustered, out / "asr_clustered.csv", written)
+    write(aggregate(ms, clustered), out / "asr_aggregate.csv", written)
+    for name, subset, keys in more_clustered:
+        write(asr_clustered(subset, keys, *bayes), out / name, written)
+    iters, seed = args.flip_iters, args.flip_seed
     twins = twin_pairs(cells)
     for name, table in (("diff_lanes.csv", diff_lanes(cells, iters, seed)),
                         ("diff_temperature.csv",
