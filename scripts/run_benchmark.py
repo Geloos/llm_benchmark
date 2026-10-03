@@ -37,9 +37,9 @@ What it outputs:
   <results-root>/temp_<t>/seed_<n>/<model_sanitized>/run_config.json                           settings
   <results-root>/temp_<t>/seed_<n>/<model_sanitized>/token_usage.json                          token totals
 
-  Every call sends the model's full recommended sampling (experiment.RECOMMENDED:
-  temperature, top_p, top_k, min_p, repeat_penalty, num_predict) plus num_ctx and seed in
-  `options`, so no Modelfile or ollama default leaks in. --temperature picks the level
+  Every call sends the model's recommended sampling (experiment.RECOMMENDED: temperature,
+  top_p, top_k, min_p, num_predict) plus num_ctx and seed in `options`. repeat_penalty is
+  not sent, so the Modelfile's or ollama's default applies. --temperature picks the level
   (low / medium / high = 0.0 / recommended / 1.5 x recommended, per model -- see
   experiment.py) and, unless --models is given, the model set: gpt-oss at low/medium/high
   reasoning at medium (the reasoning experiment), gpt-oss@low alone at low and high, plus
@@ -55,7 +55,7 @@ What it outputs:
 
   run_config.json holds every inference setting of that (seed, model) run, for
   reproducibility: a flat `sampling` block (temperature, top_p, top_k, min_p,
-  repeat_penalty, num_predict, num_ctx, seed, think, format, keep_alive), the exact
+  num_predict, num_ctx, seed, think, format, keep_alive), the exact
   `options_sent`, the Modelfile's own parameters for reference, the ollama version, and the
   model's digest, quantization, size and trained context. It is written before the first
   call actually made; a later session whose settings differ (new ollama, re-pulled model)
@@ -177,7 +177,7 @@ def engine_info(model: str) -> dict:
         info["trained_context_length"] = next(
             (int(v) for k, v in (show.get("model_info") or {}).items()
              if k.endswith(".context_length")), None)
-        # for reference only: every sampling key is sent, so these are all overridden
+        # what applies to any sampling key not sent (repeat_penalty); the rest are overridden
         info["modelfile_parameters"] = parse_modelfile_parameters(show.get("parameters"))
     except Exception as e:
         info["show_error"] = str(e)

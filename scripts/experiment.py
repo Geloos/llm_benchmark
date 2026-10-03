@@ -14,10 +14,13 @@ How to run it:
 
 What it outputs:
   Nothing. The settings it holds:
-      sampling       RECOMMENDED: one full sampling config per model (temperature, top_p,
-                     top_k, min_p, repeat_penalty, num_predict). Every key is sent in
-                     `options` on every call, so no ollama or Modelfile default leaks in.
-                     num_predict -1 = no generation cap; num_ctx is the only limit.
+      sampling       RECOMMENDED: one sampling config per model (temperature, top_p,
+                     top_k, min_p, num_predict), the creators' published values. Every
+                     key is sent in `options` on every call. repeat_penalty is deliberately
+                     NOT sent: no creator publishes one, so it is left to the Modelfile or
+                     ollama's default (1.1), as in the runs before RECOMMENDED existed.
+                     run_config.json records the Modelfile's value. num_predict -1 = no
+                     generation cap (no creator publishes one); num_ctx is the only limit.
       temperatures   three levels per model, relative to its recommended temperature:
                          low    = 0.0 (greedy)
                          medium = recommended         llama 0.6, gemma 1.0, gpt-oss 1.0
@@ -44,13 +47,12 @@ What it outputs:
 import re
 from pathlib import Path
 
+# No repeat_penalty: it is left to ollama, as before RECOMMENDED existed. Sending 1.0 made
+# gpt-oss at greedy level low loop ("T1059.003. T1059.003. ...") until num_ctx was full.
 RECOMMENDED = {
-    "gpt-oss:20b": {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0,
-                    "repeat_penalty": 1.0, "num_predict": -1},
-    "gemma3:12b":  {"temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.0,
-                    "repeat_penalty": 1.0, "num_predict": -1},
-    "llama3.1:8b": {"temperature": 0.6, "top_p": 0.9, "top_k": 0, "min_p": 0.0,
-                    "repeat_penalty": 1.0, "num_predict": -1},
+    "gpt-oss:20b": {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "num_predict": -1},
+    "gemma3:12b":  {"temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.0, "num_predict": -1},
+    "llama3.1:8b": {"temperature": 0.6, "top_p": 0.9, "top_k": 0, "min_p": 0.0, "num_predict": -1},
 }
 
 TEMPERATURE_LEVELS = ("low", "medium", "high")
