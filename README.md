@@ -30,7 +30,7 @@ Useful flags:
 | `--drop-truncated` | off | leave out calls Ollama truncated |
 | `--bayes-samples` / `--bayes-seed` | `1000000` / `20261001` | importance samples per clustered credible interval, seeded per group |
 | `--flip-iters` / `--flip-seed` | `100000` / `20261001` | random sign flips, used only past 18 logs (up to that every flip is enumerated) |
-| `--temp-pairs` | `low:medium medium:high` | temperature-level pairs to compare, e.g. `low:high` |
+| `--temp-pairs` | `low:medium` | temperature-level pairs to compare, e.g. `low:medium` |
 | `--flip-threshold` | `0.05` | flip rate above which a temperature gets flagged for 10 runs |
 
 ### What it computes
@@ -93,10 +93,10 @@ temperatures to re-run with 10 runs and gives the command (`... --runs 10`).
   McNemar appear only where each log contributes one result or pair. There is
   deliberately no pooled standard error over individual classifications.
 - **Temperature is a level, not a number.** Every model runs at its own recommended
-  sampling (`experiment.RECOMMENDED`), and the levels are relative to it: `low` = 0.0,
-  `medium` = recommended, `high` = 1.5 × recommended. So `high` is 0.9 for llama3.1 but
-  1.5 for gemma3 and gpt-oss. The `temperature` column in the stats outputs is the level,
-  and the tables print the value next to it, e.g. `high (0.9)`.
+  sampling (`experiment.RECOMMENDED`), and the levels are relative to it: `low` = 0.0
+  (greedy), `medium` = recommended. So `medium` is 0.6 for llama3.1 but 1.0 for gemma3 and
+  gpt-oss. The `temperature` column in the stats outputs is the level, and the tables
+  print the value next to it, e.g. `medium (0.6)`.
 - **Two experiments.** The temperature experiment runs every level × gpt-oss `@low`,
   llama3.1 and gemma3. The reasoning experiment runs at `medium` (gpt-oss's recommended
   sampling) with gpt-oss `@low`, `@medium` and `@high`. Both use 5 runs per series, and

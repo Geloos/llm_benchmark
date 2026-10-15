@@ -19,14 +19,14 @@ How to run it:
   # the hex lane
   python run_benchmark.py --input-root attack_logs_injected_hexa --results-root results_hexa
 
-  # 1.5 x each model's recommended temperature at seeds 42..46 (writes results/temp_high/seed_<n>/)
-  python run_benchmark.py --temperature high
+  # greedy (temperature 0) at seeds 42..46 (writes results/temp_low/seed_<n>/)
+  python run_benchmark.py --temperature low
 
   # only some of the repeats, e.g. a first pass at 3 seeds
-  python run_benchmark.py --temperature high --seeds 42 43 44
+  python run_benchmark.py --temperature low --seeds 42 43 44
 
   # more repeats: 10 runs = seeds 42..51 (the first 5 are skipped if already on disk)
-  python run_benchmark.py --temperature high --runs 10
+  python run_benchmark.py --temperature low --runs 10
 
   # one gpt-oss reasoning level: <model>@low|medium|high is sent as think=<level>
   python run_benchmark.py --models gpt-oss:20b@high --injections DO_01_canonical
@@ -40,9 +40,9 @@ What it outputs:
   Every call sends the model's recommended sampling (experiment.RECOMMENDED: temperature,
   top_p, top_k, min_p, num_predict) plus num_ctx and seed in `options`. repeat_penalty is
   not sent, so the Modelfile's or ollama's default applies. --temperature picks the level
-  (low / medium / high = 0.0 / recommended / 1.5 x recommended, per model -- see
+  (low / medium = 0.0 (greedy) / recommended, per model -- see
   experiment.py) and, unless --models is given, the model set: gpt-oss at low/medium/high
-  reasoning at medium (the reasoning experiment), gpt-oss@low alone at low and high, plus
+  reasoning at medium (the reasoning experiment), gpt-oss@low alone at low, plus
   llama3.1 and gemma3 everywhere. Unless --seeds or --runs is given, every model runs at
   seeds 42..46 (5 runs) -- greedy decoding at level low included, since a GPU is not
   guaranteed to repeat and the flip rate across those runs is what checks it. Every seed
@@ -352,9 +352,8 @@ def parse_args():
                     help="where a call that ollama truncated gets its input log, reply and "
                          "sidecar copied (default: truncated)")
     ap.add_argument("--temperature", choices=experiment.TEMPERATURE_LEVELS, default="medium",
-                    help="low, medium or high = 0.0 / each model's recommended temperature / "
-                         f"{experiment.HIGH_FACTOR} x recommended; results go to "
-                         "<results-root>/temp_<t>/ (default: medium)")
+                    help="low or medium = 0.0 (greedy) / each model's recommended "
+                         "temperature; results go to <results-root>/temp_<t>/ (default: medium)")
     repeats = ap.add_mutually_exclusive_group()
     repeats.add_argument("--seeds", nargs="+", type=int, default=None,
                          help="seeds to repeat the run with, one "

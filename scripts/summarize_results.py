@@ -410,7 +410,7 @@ def parse_args():
     ap.add_argument("--results-root", default="results", help="model output tree (default: results)")
     ap.add_argument("--out-dir", default="analysis", help="where to write outputs (default: analysis)")
     ap.add_argument("--temperature", choices=experiment.TEMPERATURE_LEVELS, default="medium",
-                    help="which temp_<t>/ folder to read and write: low, medium or high "
+                    help="which temp_<t>/ folder to read and write: low or medium "
                          "(default: medium)")
     ap.add_argument("--lane", default="plain",
                     help="the encoding lane written into verdicts.csv's lane column: plain, "

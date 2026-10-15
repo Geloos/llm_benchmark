@@ -9,7 +9,7 @@ What it does:
   column (verdict bucket normal or neutral), unchanged.
 
   A cell is (model, lane, temperature, injection, log), and its runs are the seeds
-  (run_idx 1..N). temperature is the level label (low / medium / high), not a number:
+  (run_idx 1..N). temperature is the level label (low / medium), not a number:
   each level is relative to the model's recommended temperature (experiment.py), so one
   level holds a different value per model -- asr_aggregate.csv carries both. From those cells it
   computes:
@@ -33,7 +33,7 @@ What it does:
                           series do not count gpt-oss three times.
     g  paired comparisons which test depends on how many pairs share a log.
                           Many per log -- plain vs control vs hexa and temperature low vs
-                          medium vs high (same model, matched on injection and log), and
+                          medium (same model, matched on injection and log), and
                           the SPT_ twins pooled over injection_set.LABEL_TWINS (matched on
                           log): the pairs are clustered, so the log is the unit (Miller
                           2024). d = mean success b - a per pair, summed per log; a cluster
@@ -55,7 +55,6 @@ How to run it:
   python scripts/stats_analysis.py                    # every lane and temperature on disk
   python scripts/stats_analysis.py --lane-dirs plain=analysis hexa=analysis_hexa
   python scripts/stats_analysis.py --drop-truncated
-  python scripts/stats_analysis.py --temp-pairs low:medium low:high
 
 What it outputs (under --out-dir, default analysis_stats/):
   cells.csv                         c: one row per cell
@@ -458,7 +457,7 @@ def temp_value(model: str, label: str):
 
 
 def temp_text(model: str, label: str) -> str:
-    # "high (0.9)": the level and this model's value at it
+    # "medium (0.6)": the level and this model's value at it
     value = temp_value(model, label)
     return label if pd.isna(value) else f"{label} ({value:g})"
 
@@ -523,10 +522,10 @@ def parse_args():
                          "(default 100000)")
     ap.add_argument("--flip-seed", type=int, default=20261001,
                     help="seed for those random flips (default 20261001)")
-    ap.add_argument("--temp-pairs", nargs="+", default=["low:medium", "medium:high"],
+    ap.add_argument("--temp-pairs", nargs="+", default=["low:medium"],
                     help="temperature pairs to compare, label:label "
                          f"(labels: {', '.join(experiment.TEMPERATURE_LEVELS)}; default "
-                         "low:medium medium:high)")
+                         "low:medium)")
     ap.add_argument("--flip-threshold", type=float, default=0.05,
                     help="flip rate above which a temperature should get 10 runs "
                          "(default 0.05)")

@@ -4,13 +4,13 @@ experiment.py
 
 What it does:
   The run settings several stages must agree on: each model's recommended sampling, the
-  three temperature levels derived from it and the folder each level writes to, which
+  two temperature levels derived from it and the folder each level writes to, which
   models run at which level, the seeds each level is repeated with, and how a model spec
   carries a gpt-oss reasoning level. Imported by run_benchmark.py, check_context.py,
   summarize_results.py and stats_analysis.py.
 
 How to run it:
-  Not a CLI. Import it:  import experiment;  experiment.options_for("llama3.1:8b", "high", 42, 100000)
+  Not a CLI. Import it:  import experiment;  experiment.options_for("llama3.1:8b", "medium", 42, 100000)
 
 What it outputs:
   Nothing. The settings it holds:
@@ -21,12 +21,11 @@ What it outputs:
                      ollama's default (1.1), as in the runs before RECOMMENDED existed.
                      run_config.json records the Modelfile's value. num_predict -1 = no
                      generation cap (no creator publishes one); num_ctx is the only limit.
-      temperatures   three levels per model, relative to its recommended temperature:
+      temperatures   two levels per model, relative to its recommended temperature:
                          low    = 0.0 (greedy)
                          medium = recommended         llama 0.6, gemma 1.0, gpt-oss 1.0
-                         high   = HIGH_FACTOR x rec   llama 0.9, gemma 1.5, gpt-oss 1.5
                      Only the temperature changes between levels. One folder each:
-                     <root>/temp_low, <root>/temp_medium, <root>/temp_high
+                     <root>/temp_low, <root>/temp_medium
       model specs    "gpt-oss:20b@high" = ollama model gpt-oss:20b sent with think="high".
       two experiments
                      temperature: every level x gpt-oss@low, llama3.1, gemma3.
@@ -34,8 +33,8 @@ What it outputs:
                                   gpt-oss@low / @medium / @high. medium x gpt-oss@low is the
                                   same call as the temperature experiment's, so it runs once.
                      Both repeat every series DEFAULT_RUNS = 5 times (seeds 42..46), so
-                     models_for("medium") lists five series and the other levels three:
-                     11 x 5 = 55 model runs per lane.
+                     models_for("medium") lists five series and models_for("low") three:
+                     8 x 5 = 40 model runs per lane.
       seeds          one folder each: <root>/temp_<t>/seed_<n>, so a result is reported as
                      mean +- std across the runs. Level low is repeated too: greedy decoding
                      on a GPU is not guaranteed to be deterministic, and its flip rate is
@@ -55,8 +54,7 @@ RECOMMENDED = {
     "llama3.1:8b": {"temperature": 0.6, "top_p": 0.9, "top_k": 0, "min_p": 0.0, "num_predict": -1},
 }
 
-TEMPERATURE_LEVELS = ("low", "medium", "high")
-HIGH_FACTOR = 1.5
+TEMPERATURE_LEVELS = ("low", "medium")
 
 BASE_SEED = 42
 DEFAULT_RUNS = 5
@@ -129,7 +127,7 @@ def recommended(model: str) -> dict:
 def temperature_for(model: str, temp: str) -> float:
     check_level(temp)
     rec = recommended(model)["temperature"]
-    return {"low": 0.0, "medium": rec, "high": round(HIGH_FACTOR * rec, 6)}[temp]
+    return {"low": 0.0, "medium": rec}[temp]
 
 
 def options_for(model: str, temp: str, seed: int, num_ctx: int) -> dict:

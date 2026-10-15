@@ -13,7 +13,7 @@ How to run it:
   python main.py --corpus control    # the encoding control (hex of the tag)
   python main.py --corpus both       # plain + hexa, then the comparison chart
   python main.py --corpus all        # plain + control + hexa, three-lane chart
-  python main.py --temperatures low  # only level low (default: low medium high)
+  python main.py --temperatures low  # only level low (default: low medium)
 
   Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
   --skip-summary / --skip-charts / --skip-compare, and they compose. Any extra
@@ -29,7 +29,7 @@ What it outputs:
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
-  low / medium / high = 0.0 / recommended / 1.5 x recommended, per model. Two experiments
+  low / medium = 0.0 (greedy) / recommended, per model. Two experiments
   share the run, every series repeated 5 times (seeds 42..46, one seed_<n>/ folder each)
   and reported as mean +- std:
     temperature  every level x gpt-oss@low, llama3.1, gemma3;
@@ -37,8 +37,8 @@ What it outputs:
                  temperature experiment's run too, so only @medium and @high are extra.
   Narrow the
   seeds with a forwarded --seeds, or change the count with --runs:
-      python main.py --temperatures high --seeds 42 43 44
-      python main.py --temperatures high --runs 10
+      python main.py --temperatures medium --seeds 42 43 44
+      python main.py --temperatures medium --runs 10
 
   The statistics (flip rate, CIs, McNemar) are a separate step, run once every lane and
   temperature is done: python scripts/stats_analysis.py (see README.md).
@@ -220,8 +220,8 @@ def main() -> int:
     ap.add_argument("--temperatures", nargs="+", choices=experiment.TEMPERATURE_LEVELS,
                     default=list(experiment.TEMPERATURE_LEVELS),
                     help="which temperature levels to run, each into its own temp_<t>/ "
-                         "folder: low, medium, high = 0.0 / each model's recommended / "
-                         f"{experiment.HIGH_FACTOR} x recommended (default: all three)")
+                         "folder: low, medium = 0.0 (greedy) / each model's recommended "
+                         "(default: both)")
     ap.add_argument("--skip-inject", action="store_true",
                     help="skip step 1 (reuse the existing injected corpus)")
     ap.add_argument("--skip-check", action="store_true",
