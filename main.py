@@ -10,9 +10,7 @@ What it does:
 How to run it:
   python main.py                     # the plain corpus (attack_logs/)
   python main.py --corpus hexa       # the hex corpus (attack_logs_hexa/)
-  python main.py --corpus control    # the encoding control (hex of the tag)
   python main.py --corpus both       # plain + hexa, then the comparison chart
-  python main.py --corpus all        # plain + control + hexa, three-lane chart
   python main.py --temperatures low  # only level low (default: low medium)
 
   Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
@@ -25,7 +23,7 @@ What it outputs:
   results*/ and analysis*/ (verdicts.csv,
   verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
   charts/), plus analysis*/context_check.csv. And per temperature the cross-lane chart
-  analysis/temp_<t>/charts/<lane labels joined by _vs_>.png.
+  analysis/temp_<t>/charts/plain_vs_hexa.png.
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
@@ -66,26 +64,17 @@ CORPORA = {
     "plain": {"attack_dir": "attack_logs",
               "injected": "attack_logs_injected",
               "results": "results",
-              "analysis": "analysis",
-              "hex_variant": "payload"},
+              "analysis": "analysis"},
     "hexa": {"attack_dir": "attack_logs_hexa",
              "injected": "attack_logs_injected_hexa",
              "results": "results_hexa",
-             "analysis": "analysis_hexa",
-             "hex_variant": "payload"},
-    "control": {"attack_dir": "attack_logs_hexa",
-                "injected": "attack_logs_injected_control",
-                "results": "results_control",
-                "analysis": "analysis_control",
-                "hex_variant": "tag"},
+             "analysis": "analysis_hexa"},
 }
 
 LANE_SETS = {
     "plain": ("plain",),
     "hexa": ("hexa",),
-    "control": ("control",),
     "both": ("plain", "hexa"),
-    "all": ("plain", "control", "hexa"),
 }
 
 
@@ -112,8 +101,7 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
 
     if not args.skip_inject:
         rc = run_step(f"{tag}STEP 1  inject prompts", INJECT,
-                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"],
-                       "--hex-variant", paths["hex_variant"]])
+                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"]])
         if rc != 0:
             print(f"\ninject step failed (exit {rc}); not running the benchmark.")
             return rc
@@ -186,7 +174,7 @@ def run_compare(args) -> int:
         def analysis(lane):
             return experiment.temp_dir(CORPORA[lane]["analysis"], temp)
 
-        have = [lane for lane in LANE_SETS["all"]
+        have = [lane for lane in LANE_SETS["both"]
                 if (ROOT / analysis(lane) / "verdicts.csv").is_file()]
         if len(have) < 2:
             print(f"\n=== [temp_{temp}] STEP 5  cross-lane comparison -> skipped ===")
@@ -214,9 +202,7 @@ def main() -> int:
     )
     ap.add_argument("--corpus", choices=tuple(LANE_SETS), default="plain",
                     help="which lane(s) to run: plain (attack_logs, the default); hexa "
-                         "(attack_logs_hexa, auditd fields hex-encoded); control (the same "
-                         "hex corpus carrying the plain lane's text, to isolate the "
-                         "encoding); both (plain+hexa); all (plain+control+hexa)")
+                         "(attack_logs_hexa, auditd fields hex-encoded); both (plain+hexa)")
     ap.add_argument("--temperatures", nargs="+", choices=experiment.TEMPERATURE_LEVELS,
                     default=list(experiment.TEMPERATURE_LEVELS),
                     help="which temperature levels to run, each into its own temp_<t>/ "

@@ -14,7 +14,7 @@ lane's `verdicts.csv` and never calls Ollama or re-parses a reply. Success is th
 
 ```bash
 pip install -r requirements.txt               # adds pandas, numpy, scipy, statsmodels
-python main.py --corpus all                   # inject, benchmark, summarize: 3 lanes x 3 temps x 5 runs
+python main.py --corpus both                  # inject, benchmark, summarize: 2 lanes x 2 temps x 5 runs
 python scripts/stats_analysis.py              # -> analysis_stats/
 ```
 
@@ -25,13 +25,13 @@ Useful flags:
 
 | flag | default | |
 |---|---|---|
-| `--lane-dirs` | `plain=analysis control=analysis_control hexa=analysis_hexa` | lanes to read; missing ones are skipped |
+| `--lane-dirs` | `plain=analysis hexa=analysis_hexa` | lanes to read; missing ones are skipped |
 | `--out-dir` | `analysis_stats` | |
 | `--drop-truncated` | off | leave out calls Ollama truncated |
 | `--bayes-samples` / `--bayes-seed` | `1000000` / `20261001` | importance samples per clustered credible interval, seeded per group |
 | `--flip-iters` / `--flip-seed` | `100000` / `20261001` | random sign flips, used only past 18 logs (up to that every flip is enumerated) |
 | `--temp-pairs` | `low:medium` | temperature-level pairs to compare, e.g. `low:medium` |
-| `--flip-threshold` | `0.05` | flip rate above which a temperature gets flagged for 10 runs |
+| `--reasoning-pairs` | `low:medium medium:high low:high` | gpt-oss reasoning-level pairs to compare |
 
 ### What it computes
 
@@ -47,8 +47,9 @@ seeds 42..46, numbered `run_idx` 1..5.
 | `asr_clustered.csv` | ASR per model × lane × temperature on majority-vote cells (`asr_majority` = k/cells), with a 95% credible interval from Bowyer et al.'s clustered Bayesian model (see below). |
 | `asr_aggregate.csv` | `asr_mean_std.csv` and `asr_clustered.csv` side by side per model × lane × temperature, plus `temperature_value` (that model's numeric temperature at the level). |
 | `asr_clustered_pooled.csv`, `asr_clustered_by_category.csv`, `asr_clustered_by_category_pooled.csv`, `asr_clustered_by_injection_pooled.csv` | The same for other groupings: pooled over the models, per model × category, per category pooled, and per injection pooled. Pooled means the three temperature-experiment series (gpt-oss `@low`, llama3.1, gemma3), so at `medium` the reasoning series do not count gpt-oss three times. |
-| `diff_lanes.csv` | plain vs hexa, plain vs control and control vs hexa, matched on (injection, log), per model × temperature. `diff` = mean success b − a, with a cluster sign-flip p-value and the 95% interval from inverting that test (see below). |
-| `diff_temperature.csv` | Temperature low vs medium and medium vs high, matched on (injection, log), per model × lane, the same columns. `value_a`/`value_b` give that model's numeric temperatures. |
+| `diff_lanes.csv` | plain vs hexa, matched on (injection, log), per model × temperature. `diff` = mean success b − a, with a cluster sign-flip p-value and the 95% interval from inverting that test (see below). |
+| `diff_temperature.csv` | Temperature low vs medium, matched on (injection, log), per model × lane, the same columns. `value_a`/`value_b` give that model's numeric temperatures. |
+| `diff_reasoning.csv` | gpt-oss reasoning `@low` vs `@medium`, `@medium` vs `@high` and `@low` vs `@high`, matched on (injection, log), per lane × temperature (only `medium` runs every level), the same columns plus `think_a`/`think_b`. |
 | `diff_spt_twins.csv` | Generic injections vs their label-matched SPT twins (DO_01↔SPT_01, PH_03↔SPT_02, BR_01↔SPT_06), pooled over the three pairs and matched on log, the same columns. |
 | `mcnemar_spt_twins.csv` | Each generic injection vs its own SPT twin, matched on log: exact McNemar on majority-vote cells. |
 
@@ -83,8 +84,8 @@ exact McNemar applies. The `both`/`a_only`/`b_only`/`neither` columns are majori
 counts, kept for description. Every comparison file has a `p_holm` column, adjusted
 within that file.
 
-The script also prints the flip rates. If any flip rate is above 5%, it names the
-temperatures to re-run with 10 runs and gives the command (`... --runs 10`).
+The script also prints the flip rates, for information: every series runs 5 times
+regardless, so there is no threshold.
 
 ### Reading the results
 

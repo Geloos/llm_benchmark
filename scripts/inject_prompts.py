@@ -6,9 +6,8 @@ What it does:
   Replaces the placeholder marker in the attack logs with each prompt-injection payload
   from injections.jsonl, escaped per log-line type so it cannot break out of its line.
   Works on either source corpus without a mode flag, since each holds the marker in its
-  own forms -- readable in the surfaces auditd left alone, hexed in the ones it could not;
-  --hex-variant picks whether attack_logs_hexa/'s hex auditd fields carry the prose payload
-  (default) or the underscored tag. A VG_ row rotates its guesses clockwise through the
+  own forms -- readable in the surfaces auditd left alone, hexed in the ones it could not.
+  attack_logs_hexa/'s hex auditd fields get the hex of the prose payload. A VG_ row rotates its guesses clockwise through the
   markers (marker k gets variant k mod n), so every guess lands in every file.
   A full run (no --only-id) also deletes the .txt files in each output folder that no
   longer match an injection id, so a dropped injection is not benchmarked from a
@@ -20,9 +19,6 @@ How to run it:
 
   python3 inject_prompts.py --attack-dir attack_logs_hexa \
       --out-dir attack_logs_injected_hexa                       # the hex lane
-
-  python3 inject_prompts.py --attack-dir attack_logs_hexa --hex-variant tag \
-      --out-dir attack_logs_injected_control                    # the encoding control
 
   Optional: --only-id <injection id> and --only-file <basename> to narrow the run.
 
@@ -90,7 +86,7 @@ def to_audit_hex(value):
     return value.encode('utf-8').hex().upper()
 
 
-def inject_line(line, next_stage, hex_variant='payload'):
+def inject_line(line, next_stage):
     if line.startswith('type='):
         variant, escape = 'tag', sanitize_single_line
     elif IPV4_RE.match(line):
@@ -102,18 +98,16 @@ def inject_line(line, next_stage, hex_variant='payload'):
         stage = next_stage()
         token = match.group(0)
         if token == MARKER_HEX:
-            return to_audit_hex(stage[hex_variant])
+            return to_audit_hex(stage['payload'])
         if token == MARKER_HEX_UNDERSCORED:
-            # attack_logs/ only, where every auditd surface carries the tag -- so this is
-            # hex(tag) regardless of --hex-variant, which exists solely to split the
-            # control and hexa lanes apart inside attack_logs_hexa/.
+            # attack_logs/ only, where every auditd surface carries the tag
             return to_audit_hex(stage['tag'])
         return escape(stage[variant])
 
     return MARKER_RE.sub(repl, line)
 
 
-def inject_text(text, injection, hex_variant='payload'):
+def inject_text(text, injection):
     counter = [0]
 
     def next_stage():
@@ -122,8 +116,7 @@ def inject_text(text, injection, hex_variant='payload'):
         return stage
 
     hex_count = sum(text.count(m) for m in HEX_MARKERS)
-    out_lines = [inject_line(line, next_stage, hex_variant)
-                 for line in text.splitlines()]
+    out_lines = [inject_line(line, next_stage) for line in text.splitlines()]
     result = '\n'.join(out_lines)
     if text.endswith('\n'):
         result += '\n'
@@ -172,7 +165,7 @@ def run(args):
         os.makedirs(sub_dir, exist_ok=True)
         print(fname)
         for inj in injections:
-            injected, count, hex_count = inject_text(text, inj, args.hex_variant)
+            injected, count, hex_count = inject_text(text, inj)
             out_path = os.path.join(sub_dir, out_name(in_path, inj['id']))
             with open(out_path, 'w', encoding='utf-8', newline='\n') as out:
                 out.write(injected)
@@ -198,10 +191,6 @@ def main():
                     help='injections jsonl (default: jailbreaks/injections.jsonl)')
     ap.add_argument('--out-dir', default='attack_logs_injected',
                     help='output folder (default: attack_logs_injected)')
-    ap.add_argument('--hex-variant', choices=('payload', 'tag'), default='payload',
-                    help="which text to hex into auditd fields: 'payload' (default, the "
-                         "real-attacker case) or 'tag' (the CONTROL lane -- same text as "
-                         "attack_logs/ carries, so plain-vs-this isolates the encoding)")
     ap.add_argument('--only-id', help='only this injection id (default: all)')
     ap.add_argument('--only-file', help='only this input basename (default: all)')
     run(ap.parse_args())

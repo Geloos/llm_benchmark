@@ -6,7 +6,7 @@ What it does:
   The statistics on top of the benchmark. It reads every lane's verdicts.csv (written by
   summarize_results.py, one per analysis*/temp_<t>/) and stacks them into one table. It
   never calls ollama and never re-parses a reply: success is the existing `tricked`
-  column (verdict bucket normal or neutral), unchanged.
+  column (verdict bucket normal, neutral or benign), unchanged.
 
   A cell is (model, lane, temperature, injection, log), and its runs are the seeds
   (run_idx 1..N). temperature is the level label (low / medium), not a number:
@@ -32,8 +32,9 @@ What it does:
                           -- gpt-oss @low, llama3.1, gemma3 -- so temp_medium's reasoning
                           series do not count gpt-oss three times.
     g  paired comparisons which test depends on how many pairs share a log.
-                          Many per log -- plain vs control vs hexa and temperature low vs
-                          medium (same model, matched on injection and log), and
+                          Many per log -- plain vs hexa, temperature low vs medium, and
+                          gpt-oss reasoning @low vs @medium vs @high (same base model,
+                          lane and temperature, matched on injection and log), and
                           the SPT_ twins pooled over injection_set.LABEL_TWINS (matched on
                           log): the pairs are clustered, so the log is the unit (Miller
                           2024). d = mean success b - a per pair, summed per log; a cluster
@@ -72,10 +73,10 @@ What it outputs (under --out-dir, default analysis_stats/):
   asr_clustered_by_injection_pooled.csv  e: per injection, pooled over the models
   diff_lanes.csv                    g: encoding pairs, sign-flip p + inverted-test interval
   diff_temperature.csv              g: temperature pairs, the same
+  diff_reasoning.csv                g: gpt-oss reasoning-level pairs (temp_medium), the same
   diff_spt_twins.csv                g: generic vs SPT_ twin pooled over the pairs, the same
   mcnemar_spt_twins.csv             g: each generic vs its own SPT_ twin, exact McNemar
-  and a printed summary of the flip rates, flagging any temperature whose flip rate tops
-  --flip-threshold (5%) as one to re-run with 10 runs.
+  and a printed summary of the flip rates.
 
 Needs pandas, numpy, scipy and statsmodels -- here only; every other stage is stdlib.
 The clustered intervals are the slow part: about 8 s each at the default 1,000,000 importance
@@ -103,9 +104,9 @@ except ImportError as e:
 import experiment
 import injection_set
 
-LANES = ("plain", "control", "hexa")
-DEFAULT_LANE_DIRS = ("plain=analysis", "control=analysis_control", "hexa=analysis_hexa")
-LANE_PAIRS = (("plain", "hexa"), ("plain", "control"), ("control", "hexa"))
+LANES = ("plain", "hexa")
+DEFAULT_LANE_DIRS = ("plain=analysis", "hexa=analysis_hexa")
+LANE_PAIRS = (("plain", "hexa"),)
 
 GROUP = ["model", "lane", "temperature"]
 CELL = GROUP + ["injection", "log"]
@@ -413,6 +414,22 @@ def diff_temps(cells: pd.DataFrame, pairs, iters: int, seed: int) -> pd.DataFram
     return holm(pd.DataFrame(rows), "p_signflip") if rows else pd.DataFrame()
 
 
+def diff_reasoning(cells: pd.DataFrame, pairs, iters: int, seed: int) -> pd.DataFrame:
+    # the reasoning experiment: one base model at two think levels, same lane and
+    # temperature (only temp_medium runs every level), matched on injection and log
+    level = cells["model"].map(experiment.reasoning_level)
+    based = cells.assign(base=cells["model"].str.split("@").str[0])
+    keys = ["base", "lane", "temperature"]
+    rows = []
+    for level_a, level_b in pairs:
+        m = paired(based, keys, level == level_a, level == level_b, ["injection", "log"])
+        for (base, lane, temp), g in m.groupby(keys, sort=True):
+            rows.append(dict(model=base, lane=lane, temperature=temp,
+                             think_a=level_a, think_b=level_b,
+                             **diff_row(g, iters, seed)))
+    return holm(pd.DataFrame(rows), "p_signflip") if rows else pd.DataFrame()
+
+
 def twin_pairs(cells: pd.DataFrame) -> list:
     # each generic injection matched with its SPT_ twin on log: one pair per log
     out = []
@@ -478,7 +495,7 @@ def write(df: pd.DataFrame, path: Path, written: list) -> None:
     written.append(path)
 
 
-def summary(flips: pd.DataFrame, threshold: float, corpus_lanes: list) -> None:
+def summary(flips: pd.DataFrame) -> None:
     print("\n=== flip rate (share of cells whose runs disagree on success) ===")
     show = flips[GROUP + ["runs", "cells", "flipped", "flip_rate"]].copy()
     show["flip_rate"] = show["flip_rate"].map(lambda v: "n/a" if pd.isna(v) else f"{v:.2%}")
@@ -490,16 +507,6 @@ def summary(flips: pd.DataFrame, threshold: float, corpus_lanes: list) -> None:
     worst = rated.loc[rated["flip_rate"].idxmax()]
     print(f"\nmax flip rate: {worst['flip_rate']:.2%} ({worst['model']}, {worst['lane']}, "
           f"T={temp_text(worst['model'], worst['temperature'])})")
-    over = rated[rated["flip_rate"] > threshold]
-    if over.empty:
-        print(f"every flip rate is at or below {threshold:.0%} -- 5 runs are enough")
-        return
-    labels = sorted(over["temperature"].unique(), key=lambda t: TEMP_RANK.get(t, len(TEMP_RANK)))
-    print(f"FLAG: flip rate above {threshold:.0%} at T = {', '.join(labels)} "
-          f"({len(over)} group(s)) -- give those temperatures 10 runs instead of 5:")
-    corpus = "all" if len(corpus_lanes) > 1 else corpus_lanes[0]
-    print(f"  python main.py --corpus {corpus} --skip-inject --temperatures "
-          f"{' '.join(labels)} --runs 10")
 
 
 def parse_args():
@@ -526,14 +533,19 @@ def parse_args():
                     help="temperature pairs to compare, label:label "
                          f"(labels: {', '.join(experiment.TEMPERATURE_LEVELS)}; default "
                          "low:medium)")
-    ap.add_argument("--flip-threshold", type=float, default=0.05,
-                    help="flip rate above which a temperature should get 10 runs "
-                         "(default 0.05)")
+    ap.add_argument("--reasoning-pairs", nargs="+",
+                    default=["low:medium", "medium:high", "low:high"],
+                    help="gpt-oss reasoning-level pairs to compare, level:level "
+                         f"(levels: {', '.join(experiment.REASONING_LEVELS)}; default "
+                         "low:medium medium:high low:high)")
     args = ap.parse_args()
-    args.temp_pairs = [tuple(p.split(":", 1)) for p in args.temp_pairs]
-    for pair in args.temp_pairs:
-        if len(pair) != 2 or not set(pair) <= set(experiment.TEMPERATURE_LEVELS):
-            ap.error(f"bad --temp-pairs entry {':'.join(pair)!r}")
+    for name, allowed in (("temp_pairs", experiment.TEMPERATURE_LEVELS),
+                          ("reasoning_pairs", experiment.REASONING_LEVELS)):
+        pairs = [tuple(p.split(":", 1)) for p in getattr(args, name)]
+        for pair in pairs:
+            if len(pair) != 2 or not set(pair) <= set(allowed):
+                ap.error(f"bad --{name.replace('_', '-')} entry {':'.join(pair)!r}")
+        setattr(args, name, pairs)
     return args
 
 
@@ -586,6 +598,8 @@ def main() -> None:
     for name, table in (("diff_lanes.csv", diff_lanes(cells, iters, seed)),
                         ("diff_temperature.csv",
                          diff_temps(cells, args.temp_pairs, iters, seed)),
+                        ("diff_reasoning.csv",
+                         diff_reasoning(cells, args.reasoning_pairs, iters, seed)),
                         ("diff_spt_twins.csv", diff_twins(twins, iters, seed)),
                         ("mcnemar_spt_twins.csv", mcnemar_twins(twins))):
         if table.empty:
@@ -593,7 +607,7 @@ def main() -> None:
             continue
         write(table, out / name, written)
 
-    summary(flips, args.flip_threshold, sorted(set(df["lane"])))
+    summary(flips)
     print(f"\nwrote {len(written)} files under {out}/")
 
 
