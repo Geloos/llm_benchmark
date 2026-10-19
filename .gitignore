@@ -20,5 +20,7 @@ truncated/
 __pycache__/
 *.pyc
 
+*.csv
+
 #claude
 claude.md

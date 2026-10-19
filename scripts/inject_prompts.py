@@ -7,7 +7,9 @@ What it does:
   from injections.jsonl, escaped per log-line type so it cannot break out of its line.
   Works on either source corpus without a mode flag, since each holds the marker in its
   own forms -- readable in the surfaces auditd left alone, hexed in the ones it could not.
-  attack_logs_hexa/'s hex auditd fields get the hex of the prose payload. A VG_ row rotates its guesses clockwise through the
+  attack_logs_hexa/ gets the hex of the prose payload at EVERY site -- its hex auditd fields
+  and its free text (Apache UA, sshd, mysql) alike -- so the hex lane holds no readable copy
+  of the injection anywhere. A VG_ row rotates its guesses clockwise through the
   markers (marker k gets variant k mod n), so every guess lands in every file.
   A full run (no --only-id) also deletes the .txt files in each output folder that no
   longer match an injection id, so a dropped injection is not benchmarked from a
@@ -97,7 +99,9 @@ def inject_line(line, next_stage):
     def repl(match):
         stage = next_stage()
         token = match.group(0)
-        if token == MARKER_HEX:
+        if token in (MARKER_HEX, MARKER_SPACED):
+            # attack_logs_hexa/ only: the hex lane is hex at EVERY site, free text included,
+            # so no readable copy of the payload (Apache UA, sshd, mysql) carries the result
             return to_audit_hex(stage['payload'])
         if token == MARKER_HEX_UNDERSCORED:
             # attack_logs/ only, where every auditd surface carries the tag
@@ -115,7 +119,7 @@ def inject_text(text, injection):
         counter[0] += 1
         return stage
 
-    hex_count = sum(text.count(m) for m in HEX_MARKERS)
+    hex_count = sum(text.count(m) for m in HEX_MARKERS + (MARKER_SPACED,))
     out_lines = [inject_line(line, next_stage) for line in text.splitlines()]
     result = '\n'.join(out_lines)
     if text.endswith('\n'):
