@@ -83,6 +83,9 @@ REASONING_TITLE = "gpt-oss reasoning effort, by category"
 TOP_STEM = "top_injections"
 TOP_TITLE = "Strongest injections per model"
 TOP_MODEL_TITLE = "Strongest injections"
+# fixed hues in the reasoning charts, by gpt-oss level; the other levels keep their slot's.
+# gemma3's blue is free there, since those charts hold gpt-oss alone
+REASONING_HUE = {"high": SERIES[0]}
 LANE_HATCH = (None, "///", "...", "xxx")
 SENTINEL = "<!-- charts:begin -->"
 
@@ -597,6 +600,8 @@ def main() -> None:
     slot_of = {model: i for i, model in
                enumerate(models + [m for m in levels if m not in models])}
     hue = lambda model, _slot: {"color": SERIES[slot_of[model]]}
+    r_hue = lambda model, _slot: {"color": REASONING_HUE.get(
+        experiment.reasoning_level(model), SERIES[slot_of[model]])}
 
     categories = pooled_order({k: v for k, v in by_category.items() if k[0] in models})
 
@@ -662,7 +667,7 @@ def main() -> None:
         r_cells = {k: v for k, v in by_category.items() if k[0] in levels}
         r_categories = pooled_order(r_cells)
         r_overview = render(category_stats, levels, r_categories, REASONING_TITLE,
-                            r_dir / f"{CHART_STEM}.png", category_label, style_fn=hue)
+                            r_dir / f"{CHART_STEM}.png", category_label, style_fn=r_hue)
         written.append(r_overview)
         r_per_category = []
         if not args.no_per_category:
@@ -676,7 +681,7 @@ def main() -> None:
                 image = render(injection_stats, levels, injections,
                                f"gpt-oss reasoning effort: {category.replace('_', ' ')}",
                                sub_dir / f"{category}.png", injection_label,
-                               style_fn=hue)
+                               style_fn=r_hue)
                 r_per_category.append((category, image))
                 written.append(image)
         reasoning = (r_overview, r_csv, r_per_category)
