@@ -8,7 +8,7 @@ injection succeeded. See `CLAUDE.md` for how the pipeline works.
 
 ```bash
 pip install -r requirements.txt
-python main.py --corpus both                  # inject, benchmark, summarize, chart: 2 lanes x 2 temps x 5 runs
+python main.py --corpus both                  # inject, benchmark, summarize, chart, 5 runs each: plain at low + medium, hexa at low
 ```
 
 ## Reading the results

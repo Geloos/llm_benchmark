@@ -9,6 +9,10 @@ What it does:
   Every log is a real attack, so a taller bar means the jailbreak fooled the model more
   often. --compare instead draws one cross-lane chart, a bar per model per lane.
 
+  The overview, per-category and top-injections charts show gpt-oss at its temperature-
+  experiment level (@low) only, beside llama3.1 and gemma3, so temp_medium draws the same
+  series as temp_low; @medium and @high appear in the reasoning charts alone.
+
   When verdicts.csv holds more than one seed (every temperature, 5 by default), the rate is
   computed per seed and the bar is the mean across seeds, with a whisker of +-1 sample
   std, clipped to [0, 1]. A single seed (e.g. a --seeds 42 run) draws a bare bar.
@@ -18,13 +22,14 @@ What it does:
     @medium / @high series only, in that order. Drawn only when more than one level is
     present, i.e. at temp_medium (the reasoning experiment), like reasoning_report.md.
   - top injections: one PNG with a panel per model, each that model's --top strongest
-    injections ranked by trick rate (ties broken by the smaller std, then the id).
+    injections ranked by trick rate (ties broken by the smaller std, then the id), and
+    the same panel again as one PNG per model.
 
 How to run it:
   python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
   python3 plot_results.py --no-per-category        # overview chart only
   python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
-  python3 plot_results.py --top 15                 # 15 injections per panel (default 10)
+  python3 plot_results.py --top 10                 # 10 injections per panel (default 5)
   python3 plot_results.py --no-reasoning --no-top  # skip the two extra views
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
 
@@ -34,6 +39,7 @@ What it outputs:
   analysis/charts/reasoning/trick_rate_by_category.png    gpt-oss levels, per category
   analysis/charts/reasoning/by_category/<category>.png    gpt-oss levels, per injection
   analysis/charts/top_injections.png            a panel per model, its top injections
+  analysis/charts/top_injections/<model>.png    the same panel, one PNG per model
   analysis/trick_rate_by_category.csv           the numbers behind the overview
   analysis/reasoning_by_category.csv            ... behind the reasoning overview
   analysis/top_injections.csv                   ... behind the top-injections panels
@@ -76,6 +82,7 @@ REASONING_STEM = "reasoning_by_category"
 REASONING_TITLE = "gpt-oss reasoning effort, by category"
 TOP_STEM = "top_injections"
 TOP_TITLE = "Strongest injections per model"
+TOP_MODEL_TITLE = "Strongest injections"
 LANE_HATCH = (None, "///", "...", "xxx")
 SENTINEL = "<!-- charts:begin -->"
 
@@ -426,11 +433,12 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
         for category, image in per_category:
             block += [f"**{category}**", "", f"![{category}]({rel(image)})", ""]
     if top:
-        image, csv_path = top
+        image, csv_path, model_dir = top
         block += ["### Strongest injections per model", "",
                   f"![{TOP_TITLE}]({rel(image)})", "",
                   f"The ranking behind every panel is in [`{rel(csv_path)}`]"
-                  f"({rel(csv_path)}).", ""]
+                  f"({rel(csv_path)}); each panel is also a PNG of its own in "
+                  f"`{rel(model_dir)}/`.", ""]
     if reasoning:
         image, csv_path, reasoning_per_category = reasoning
         block += ["### gpt-oss reasoning effort", "",
@@ -527,9 +535,9 @@ def parse_args():
     ap.add_argument("--no-reasoning", action="store_true",
                     help="skip the gpt-oss reasoning-level charts")
     ap.add_argument("--no-top", action="store_true",
-                    help="skip the top-injections-per-model chart")
-    ap.add_argument("--top", type=int, default=10, metavar="N",
-                    help="injections per model in the top-injections chart (default: 10)")
+                    help="skip the top-injections-per-model charts")
+    ap.add_argument("--top", type=int, default=5, metavar="N",
+                    help="injections per model in the top-injections charts (default: 5)")
     ap.add_argument("--compare", nargs="+", metavar="OTHER_ANALYSIS_DIR",
                     help="draw ONLY the cross-lane comparison chart, reading these dirs' "
                          "verdicts.csv alongside --analysis-dir's (e.g. --compare "
@@ -569,12 +577,28 @@ def main() -> None:
         sys.exit(f"ERROR: no usable rows in {verdicts} "
                  f"({unknown} skipped as unknown category / verdict)")
 
-    models = model_order(by_category)
-    if len(models) > len(SERIES):
-        sys.exit(f"ERROR: {len(models)} models but only {len(SERIES)} colour slots. "
+    all_models = model_order(by_category)
+    if len(all_models) > len(SERIES):
+        sys.exit(f"ERROR: {len(all_models)} models but only {len(SERIES)} colour slots. "
                  f"Cycling hues would make two models indistinguishable -- chart them in "
                  f"batches with a filtered verdicts.csv instead.")
-    categories = pooled_order(by_category)
+
+    rank = {level: i for i, level in enumerate(experiment.REASONING_LEVELS)}
+    level_rank = lambda m: rank.get(experiment.reasoning_level(m), -1)
+    # the overview, per-category and top charts show the temperature-experiment series
+    # only (gpt-oss @low), so temp_medium draws the same bars as temp_low; the other
+    # gpt-oss levels are in the reasoning charts. A run of other levels alone shows them all
+    models = [m for m in all_models if experiment.reasoning_level(m)
+              in (None, experiment.TEMPERATURE_EXPERIMENT_THINK)] or all_models
+    levels = sorted((m for m in all_models if experiment.reasoning_level(m)), key=level_rank)
+
+    # hues by the main series first, so a model has the same colour at every temperature,
+    # then the extra gpt-oss levels; a model keeps its hue in every chart
+    slot_of = {model: i for i, model in
+               enumerate(models + [m for m in levels if m not in models])}
+    hue = lambda model, _slot: {"color": SERIES[slot_of[model]]}
+
+    categories = pooled_order({k: v for k, v in by_category.items() if k[0] in models})
 
     out_dir.mkdir(parents=True, exist_ok=True)
 
@@ -584,7 +608,7 @@ def main() -> None:
                "trick_rate_std"])
 
     overview = render(category_stats, models, categories, TITLE,
-                      out_dir / f"{CHART_STEM}.png", category_label)
+                      out_dir / f"{CHART_STEM}.png", category_label, style_fn=hue)
     written = [overview]
 
     by_injection, _ = aggregate(rows, "injection")
@@ -593,24 +617,18 @@ def main() -> None:
 
     per_category = []
     if not args.no_per_category:
+        inj_cells = {k: v for k, v in by_injection.items() if k[0] in models}
         sub_dir = out_dir / "by_category"
         sub_dir.mkdir(parents=True, exist_ok=True)
         for category in categories:
-            injections = pooled_order(by_injection, members[category])
+            injections = pooled_order(inj_cells, members[category])
             if not injections:
                 continue
             image = render(injection_stats, models, injections,
                            category.replace("_", " "), sub_dir / f"{category}.png",
-                           injection_label)
+                           injection_label, style_fn=hue)
             per_category.append((category, image))
             written.append(image)
-
-    # a model keeps the hue it has in the overview in every other chart
-    slot_of = {model: i for i, model in enumerate(models)}
-    hue = lambda model, _slot: {"color": SERIES[slot_of[model]]}
-
-    rank = {level: i for i, level in enumerate(experiment.REASONING_LEVELS)}
-    level_rank = lambda m: rank.get(experiment.reasoning_level(m), -1)
 
     top = None
     if not args.no_top and args.top > 0:
@@ -624,11 +642,15 @@ def main() -> None:
                    "trick_rate_std"])
         image = render_top(injection_stats, ranked, slot_of, TOP_TITLE,
                            out_dir / f"{TOP_STEM}.png")
-        top = (image, top_csv)
         written.append(image)
+        model_dir = out_dir / TOP_STEM
+        model_dir.mkdir(parents=True, exist_ok=True)
+        for model in panels:
+            written.append(render_top(injection_stats, {model: ranked[model]}, slot_of,
+                                      TOP_MODEL_TITLE, model_dir / f"{model}.png"))
+        top = (image, top_csv, model_dir)
 
     reasoning = None
-    levels = sorted((m for m in models if experiment.reasoning_level(m)), key=level_rank)
     # only where the reasoning experiment runs (temp_medium); elsewhere gpt-oss has one level
     if not args.no_reasoning and len(levels) > 1:
         r_dir = out_dir / "reasoning"

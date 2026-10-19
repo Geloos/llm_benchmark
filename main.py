@@ -13,6 +13,9 @@ How to run it:
   python main.py --corpus both       # plain + hexa, then the comparison chart
   python main.py --temperatures low  # only level low (default: low medium)
 
+  The hexa lane runs level low only (LANE_TEMPERATURES), so the cross-lane chart is
+  drawn at temp_low alone and --corpus hexa --temperatures medium runs nothing.
+
   Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
   --skip-summary / --skip-charts / --skip-compare, and they compose. Any extra
   args are forwarded to run_benchmark.py:
@@ -22,8 +25,8 @@ What it outputs:
   Per lane: attack_logs_injected*/, then one temp_<t>/ folder per temperature under
   results*/ and analysis*/ (verdicts.csv,
   verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
-  charts/), plus analysis*/context_check.csv. And per temperature the cross-lane chart
-  analysis/temp_<t>/charts/plain_vs_hexa.png.
+  charts/), plus analysis*/context_check.csv. And the cross-lane chart
+  analysis/temp_low/charts/plain_vs_hexa.png.
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
@@ -75,6 +78,17 @@ LANE_SETS = {
     "both": ("plain", "hexa"),
 }
 
+# the temperature levels each lane runs; --temperatures narrows these, never widens them.
+# hexa runs greedy (low) only, so the cross-lane chart exists at temp_low alone
+LANE_TEMPERATURES = {
+    "plain": experiment.TEMPERATURE_LEVELS,
+    "hexa": ("low",),
+}
+
+
+def lane_temperatures(lane: str, args) -> list[str]:
+    return [t for t in args.temperatures if t in LANE_TEMPERATURES[lane]]
+
 
 def run_step(name: str, script: Path, extra_args: list[str]) -> int:
     cmd = [sys.executable, str(script), *extra_args]
@@ -96,6 +110,12 @@ def forward_flags(extra_args: list[str], keep: set[str]) -> list[str]:
 def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     paths = CORPORA[lane]
     tag = f"[{lane}] " if labelled else ""
+
+    temps = lane_temperatures(lane, args)
+    if not temps:
+        print(f"\n=== {tag}lane skipped: it runs at {', '.join(LANE_TEMPERATURES[lane])} "
+              f"only, and --temperatures asked for {', '.join(args.temperatures)} ===")
+        return 0
 
     if not args.skip_inject:
         rc = run_step(f"{tag}STEP 1  inject prompts", INJECT,
@@ -119,7 +139,7 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     else:
         print(f"\n=== {tag}STEP 1b context preflight -> skipped ===")
 
-    for temp in args.temperatures:
+    for temp in temps:
         rc = run_temperature(lane, temp, args, benchmark_args, tag)
         if rc != 0:
             return rc
@@ -171,6 +191,12 @@ def run_compare(args) -> int:
     for temp in args.temperatures:
         def analysis(lane):
             return experiment.temp_dir(CORPORA[lane]["analysis"], temp)
+
+        absent = [lane for lane in LANE_SETS["both"] if temp not in LANE_TEMPERATURES[lane]]
+        if absent:
+            print(f"\n=== [temp_{temp}] STEP 5  cross-lane comparison -> skipped "
+                  f"({' and '.join(absent)} does not run at {temp}) ===")
+            continue
 
         have = [lane for lane in LANE_SETS["both"]
                 if (ROOT / analysis(lane) / "verdicts.csv").is_file()]
