@@ -7,7 +7,7 @@ What it does:
   two temperature levels derived from it and the folder each level writes to, which
   models run at which level, the seeds each level is repeated with, and how a model spec
   carries a gpt-oss reasoning level. Imported by run_benchmark.py, check_context.py,
-  summarize_results.py and stats_analysis.py.
+  summarize_results.py and plot_results.py.
 
 How to run it:
   Not a CLI. Import it:  import experiment;  experiment.options_for("llama3.1:8b", "medium", 42, 100000)
@@ -37,8 +37,8 @@ What it outputs:
                      8 x 5 = 40 model runs per lane.
       seeds          one folder each: <root>/temp_<t>/seed_<n>, so a result is reported as
                      mean +- std across the runs. Level low is repeated too: greedy decoding
-                     on a GPU is not guaranteed to be deterministic, and its flip rate is
-                     what tests that. --runs N takes seeds 42..42+N-1.
+                     on a GPU is not guaranteed to be deterministic, and its std across
+                     the runs is what shows that. --runs N takes seeds 42..42+N-1.
       run_idx        the 1-based position of a seed in that sequence (42 -> 1).
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
 """

@@ -13,16 +13,30 @@ What it does:
   computed per seed and the bar is the mean across seeds, with a whisker of +-1 sample
   std, clipped to [0, 1]. A single seed (e.g. a --seeds 42 run) draws a bare bar.
 
+  Two more views of the same verdicts.csv:
+  - reasoning: the overview and per-category charts again, for the gpt-oss @low /
+    @medium / @high series only, in that order. Drawn only when more than one level is
+    present, i.e. at temp_medium (the reasoning experiment), like reasoning_report.md.
+  - top injections: one PNG with a panel per model, each that model's --top strongest
+    injections ranked by trick rate (ties broken by the smaller std, then the id).
+
 How to run it:
   python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
   python3 plot_results.py --no-per-category        # overview chart only
   python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
+  python3 plot_results.py --top 15                 # 15 injections per panel (default 10)
+  python3 plot_results.py --no-reasoning --no-top  # skip the two extra views
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
 
 What it outputs:
   analysis/charts/trick_rate_by_category.png    the overview, a group per category
   analysis/charts/by_category/<category>.png    one per category, a group per injection
+  analysis/charts/reasoning/trick_rate_by_category.png    gpt-oss levels, per category
+  analysis/charts/reasoning/by_category/<category>.png    gpt-oss levels, per injection
+  analysis/charts/top_injections.png            a panel per model, its top injections
   analysis/trick_rate_by_category.csv           the numbers behind the overview
+  analysis/reasoning_by_category.csv            ... behind the reasoning overview
+  analysis/top_injections.csv                   ... behind the top-injections panels
   analysis/report.md                            gains a "## Charts" section, rewritten in
                                                 place on every run
 
@@ -41,6 +55,8 @@ import textwrap
 from collections import defaultdict
 from pathlib import Path
 
+import experiment
+
 BUCKETS = ("attack", "normal", "neutral", "benign", "unparseable", "error")
 # must match summarize_results.TRICKED_BUCKETS
 TRICKED_BUCKETS = ("normal", "neutral", "benign", "unparseable", "error")
@@ -56,6 +72,10 @@ THEME = {
 CHART_STEM = "trick_rate_by_category"
 TITLE = "Jailbreaks by category"
 COMPARE_TITLE = "Trick rate by injection surface"
+REASONING_STEM = "reasoning_by_category"
+REASONING_TITLE = "gpt-oss reasoning effort, by category"
+TOP_STEM = "top_injections"
+TOP_TITLE = "Strongest injections per model"
 LANE_HATCH = (None, "///", "...", "xxx")
 SENTINEL = "<!-- charts:begin -->"
 
@@ -284,7 +304,101 @@ def render(stats, models, groups, title: str, out_path: Path, label_fn,
     return out_path
 
 
-def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category) -> bool:
+def top_injections(stats, models, top_n: int):
+    # model -> its top_n injections, strongest first: by mean trick rate, then the
+    # steadier one (smaller std), then the id so ties cut the same way every run
+    out = {}
+    for model in models:
+        ranked = sorted((g for m, g in stats if m == model),
+                        key=lambda g: (-stats[(model, g)][0],
+                                       stats[(model, g)][1] or 0.0, g))
+        out[model] = ranked[:top_n]
+    return out
+
+
+def top_rows(top, stats, category_of):
+    rows = []
+    for model, injections in top.items():
+        for rank, injection in enumerate(injections, 1):
+            rows.append({"model": model, "rank": rank, "injection": injection,
+                         "category": category_of.get(injection, ""),
+                         **rate_fields(stats, (model, injection))})
+    return rows
+
+
+def render_top(stats, top, slot_of, title: str, out_path: Path) -> Path:
+    # one horizontal-bar panel per model, all in one PNG; strongest injection on top
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    from matplotlib.ticker import MultipleLocator, PercentFormatter
+
+    t = THEME
+    models = list(top)
+    ncols = min(len(models), 3)
+    nrows = -(-len(models) // ncols)
+    rows_per_panel = max((len(v) for v in top.values()), default=1)
+    panel_h = 0.28 * rows_per_panel + 0.9
+    dpi = 200
+
+    plt.rcParams["font.family"] = "sans-serif"
+    plt.rcParams["font.sans-serif"] = ["Segoe UI", "DejaVu Sans", "Arial"]
+
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4.6 * ncols, panel_h * nrows + 0.8),
+                             dpi=dpi, squeeze=False)
+    fig.patch.set_facecolor(t["surface"])
+
+    for i, ax in enumerate(axes.flat):
+        if i >= len(models):
+            ax.set_visible(False)
+            continue
+        model = models[i]
+        injections = top[model]
+        values = [stats[(model, g)][0] for g in injections]
+        stds = [stats[(model, g)][1] for g in injections]
+        ys = list(range(len(injections)))
+        ax.set_facecolor(t["surface"])
+        ax.barh(ys, values, 0.7, color=SERIES[slot_of[model]], zorder=3)
+
+        lower = [min(s, v) if s is not None else 0.0 for v, s in zip(values, stds)]
+        upper = [min(s, 1 - v) if s is not None else 0.0 for v, s in zip(values, stds)]
+        whisk = [j for j, s in enumerate(stds) if s is not None]
+        if whisk:
+            ax.errorbar([values[j] for j in whisk], [ys[j] for j in whisk],
+                        xerr=[[lower[j] for j in whisk], [upper[j] for j in whisk]],
+                        fmt="none", ecolor=t["secondary"], elinewidth=0.8,
+                        capsize=2, capthick=0.8, zorder=4)
+        for y, v, up in zip(ys, values, upper):
+            ax.annotate(f"{v:.0%}", (v + up, y), xytext=(3, 0),
+                        textcoords="offset points", ha="left", va="center",
+                        fontsize=6.5, color=t["muted"])
+
+        ax.set_xlim(0, 1.12)
+        ax.xaxis.set_major_locator(MultipleLocator(0.25))
+        ax.xaxis.set_major_formatter(PercentFormatter(1.0))
+        ax.set_ylim(len(injections) - 0.5, -0.5)
+        ax.set_yticks(ys)
+        ax.set_yticklabels(injections)
+        ax.tick_params(colors=t["muted"], labelsize=7, length=0)
+        ax.grid(axis="x", color=t["grid"], linewidth=0.8, linestyle="-", zorder=0)
+        ax.set_axisbelow(True)
+        for side in ("top", "right", "bottom"):
+            ax.spines[side].set_visible(False)
+        ax.spines["left"].set_color(t["baseline"])
+        ax.spines["left"].set_linewidth(0.8)
+        ax.set_title(model, loc="left", color=t["primary"], fontsize=10,
+                     fontweight="bold", pad=6)
+
+    fig.suptitle(title, x=0.01, ha="left", color=t["primary"], fontsize=15,
+                 fontweight="bold")
+    fig.tight_layout(rect=(0, 0, 1, 0.97), h_pad=1.5, w_pad=2.0)
+    fig.savefig(out_path, facecolor=t["surface"], bbox_inches="tight", dpi=dpi)
+    plt.close(fig)
+    return out_path
+
+
+def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
+                    reasoning=None, top=None) -> bool:
     if not report_path.is_file():
         return False
     base = report_path.parent
@@ -311,6 +425,20 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category)
                   "Per-injection counts are in `verdicts_by_injection.csv`.", ""]
         for category, image in per_category:
             block += [f"**{category}**", "", f"![{category}]({rel(image)})", ""]
+    if top:
+        image, csv_path = top
+        block += ["### Strongest injections per model", "",
+                  f"![{TOP_TITLE}]({rel(image)})", "",
+                  f"The ranking behind every panel is in [`{rel(csv_path)}`]"
+                  f"({rel(csv_path)}).", ""]
+    if reasoning:
+        image, csv_path, reasoning_per_category = reasoning
+        block += ["### gpt-oss reasoning effort", "",
+                  f"![{REASONING_TITLE}]({rel(image)})", "",
+                  f"The counts behind every bar are in [`{rel(csv_path)}`]"
+                  f"({rel(csv_path)}).", ""]
+        for category, cat_image in reasoning_per_category:
+            block += [f"**{category}**", "", f"![{category}]({rel(cat_image)})", ""]
     report_path.write_text(head + "\n\n" + "\n".join(block), encoding="utf-8")
     return True
 
@@ -396,6 +524,12 @@ def parse_args():
                     help="only draw the overview, skip the per-category charts")
     ap.add_argument("--no-report-embed", action="store_true",
                     help="do not touch report.md")
+    ap.add_argument("--no-reasoning", action="store_true",
+                    help="skip the gpt-oss reasoning-level charts")
+    ap.add_argument("--no-top", action="store_true",
+                    help="skip the top-injections-per-model chart")
+    ap.add_argument("--top", type=int, default=10, metavar="N",
+                    help="injections per model in the top-injections chart (default: 10)")
     ap.add_argument("--compare", nargs="+", metavar="OTHER_ANALYSIS_DIR",
                     help="draw ONLY the cross-lane comparison chart, reading these dirs' "
                          "verdicts.csv alongside --analysis-dir's (e.g. --compare "
@@ -453,11 +587,12 @@ def main() -> None:
                       out_dir / f"{CHART_STEM}.png", category_label)
     written = [overview]
 
+    by_injection, _ = aggregate(rows, "injection")
+    injection_stats = seed_stats(rows, "injection")
+    members = group_by_category(rows)
+
     per_category = []
     if not args.no_per_category:
-        by_injection, _ = aggregate(rows, "injection")
-        injection_stats = seed_stats(rows, "injection")
-        members = group_by_category(rows)
         sub_dir = out_dir / "by_category"
         sub_dir.mkdir(parents=True, exist_ok=True)
         for category in categories:
@@ -470,6 +605,60 @@ def main() -> None:
             per_category.append((category, image))
             written.append(image)
 
+    # a model keeps the hue it has in the overview in every other chart
+    slot_of = {model: i for i, model in enumerate(models)}
+    hue = lambda model, _slot: {"color": SERIES[slot_of[model]]}
+
+    rank = {level: i for i, level in enumerate(experiment.REASONING_LEVELS)}
+    level_rank = lambda m: rank.get(experiment.reasoning_level(m), -1)
+
+    top = None
+    if not args.no_top and args.top > 0:
+        # panels alphabetical, but the gpt-oss levels as low, medium, high
+        panels = sorted(models, key=lambda m: (m.partition("@")[0], level_rank(m)))
+        ranked = top_injections(injection_stats, panels, args.top)
+        category_of = {inj: cat for cat, injs in members.items() for inj in injs}
+        top_csv = analysis_dir / f"{TOP_STEM}.csv"
+        write_csv(top_rows(ranked, injection_stats, category_of), top_csv,
+                  ["model", "rank", "injection", "category", "seeds", "trick_rate",
+                   "trick_rate_std"])
+        image = render_top(injection_stats, ranked, slot_of, TOP_TITLE,
+                           out_dir / f"{TOP_STEM}.png")
+        top = (image, top_csv)
+        written.append(image)
+
+    reasoning = None
+    levels = sorted((m for m in models if experiment.reasoning_level(m)), key=level_rank)
+    # only where the reasoning experiment runs (temp_medium); elsewhere gpt-oss has one level
+    if not args.no_reasoning and len(levels) > 1:
+        r_dir = out_dir / "reasoning"
+        r_dir.mkdir(parents=True, exist_ok=True)
+        r_csv = analysis_dir / f"{REASONING_STEM}.csv"
+        write_csv(twin_rows(by_category, category_stats, levels, categories), r_csv,
+                  ["model", "category", "seen", *BUCKETS, "seeds", "trick_rate",
+                   "trick_rate_std"])
+        r_cells = {k: v for k, v in by_category.items() if k[0] in levels}
+        r_categories = pooled_order(r_cells)
+        r_overview = render(category_stats, levels, r_categories, REASONING_TITLE,
+                            r_dir / f"{CHART_STEM}.png", category_label, style_fn=hue)
+        written.append(r_overview)
+        r_per_category = []
+        if not args.no_per_category:
+            r_inj_cells = {k: v for k, v in by_injection.items() if k[0] in levels}
+            sub_dir = r_dir / "by_category"
+            sub_dir.mkdir(parents=True, exist_ok=True)
+            for category in r_categories:
+                injections = pooled_order(r_inj_cells, members[category])
+                if not injections:
+                    continue
+                image = render(injection_stats, levels, injections,
+                               f"gpt-oss reasoning effort: {category.replace('_', ' ')}",
+                               sub_dir / f"{category}.png", injection_label,
+                               style_fn=hue)
+                r_per_category.append((category, image))
+                written.append(image)
+        reasoning = (r_overview, r_csv, r_per_category)
+
     if unknown:
         print(f"WARNING: skipped {unknown} rows with an unknown category or verdict "
               f"(stale results whose injection id is not in injections.jsonl?)")
@@ -480,7 +669,8 @@ def main() -> None:
         print(f"{model:24} weakest against: {best[0]:26} trick rate {best[1]:.0%}")
 
     if not args.no_report_embed and embed_in_report(
-            analysis_dir / "report.md", overview, twin, per_category):
+            analysis_dir / "report.md", overview, twin, per_category,
+            reasoning=reasoning, top=top):
         print(f"embedded the charts in {analysis_dir / 'report.md'}")
     print(f"wrote {twin} and {len(written)} chart(s) under {out_dir}")
 

@@ -38,8 +38,6 @@ What it outputs:
       python main.py --temperatures medium --seeds 42 43 44
       python main.py --temperatures medium --runs 10
 
-  The statistics (flip rate, CIs, McNemar) are a separate step, run once every lane and
-  temperature is done: python scripts/stats_analysis.py (see README.md).
 """
 
 from __future__ import annotations

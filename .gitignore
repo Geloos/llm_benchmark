@@ -10,7 +10,6 @@ analysis/
 attack_logs_injected_hexa/
 results_hexa/
 analysis_hexa/
-analysis_stats/
 truncated/
 
 # notebook checkpoints

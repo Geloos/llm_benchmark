@@ -23,8 +23,7 @@ How to run it:
   Every root gets temp_<t>/ appended (experiment.temp_dir), so the line above reads
   every results/temp_low/seed_<n>/ on disk and writes analysis/temp_low/. The seeds are
   whichever seed_<n>/ folders exist -- five per temperature by default. --lane only
-  labels the rows (main.py passes plain / hexa), so stats_analysis.py can stack
-  every lane's verdicts.csv into one table.
+  labels the rows (main.py passes plain / hexa).
 
   Rates are computed per seed (over the logs) and reported as mean +- std across the
   seeds, the std being the sample std (n-1). With a single seed the std is left empty,

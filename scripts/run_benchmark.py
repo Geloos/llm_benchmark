@@ -45,7 +45,7 @@ What it outputs:
   reasoning at medium (the reasoning experiment), gpt-oss@low alone at low, plus
   llama3.1 and gemma3 everywhere. Unless --seeds or --runs is given, every model runs at
   seeds 42..46 (5 runs) -- greedy decoding at level low included, since a GPU is not
-  guaranteed to repeat and the flip rate across those runs is what checks it. Every seed
+  guaranteed to repeat and the std across those runs is what shows it. Every seed
   gets its own folder, so the skip-if-exists rule works per seed and a crashed run resumes
   where it stopped.
 
