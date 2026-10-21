@@ -40,14 +40,18 @@ What it outputs:
                      on a GPU is not guaranteed to be deterministic, and its std across
                      the runs is what shows that. --runs N takes seeds 42..42+N-1.
       run_idx        the 1-based position of a seed in that sequence (42 -> 1).
+      ASR +- 95% CI  mean_ci(): a rate's mean across the seeds, its sample std, and the
+                     half-width of its two-sided 95% Student-t confidence interval,
+                     t(0.975, n-1) * std / sqrt(n). Shared by summarize_results.py and
+                     plot_results.py so the report and the whiskers agree.
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
 """
 
+import math
 import re
+import statistics
 from pathlib import Path
 
-# No repeat_penalty: it is left to ollama, as before RECOMMENDED existed. Sending 1.0 made
-# gpt-oss at greedy level low loop ("T1059.003. T1059.003. ...") until num_ctx was full.
 RECOMMENDED = {
     "gpt-oss:20b": {"temperature": 1.0, "top_p": 1.0, "top_k": 0, "min_p": 0.0, "num_predict": -1},
     "gemma3:12b":  {"temperature": 1.0, "top_p": 0.95, "top_k": 64, "min_p": 0.0, "num_predict": -1},
@@ -63,10 +67,12 @@ SEED_RE = re.compile(r"^seed_(\d+)$")
 
 REASONING_LEVELS = ("low", "medium", "high")
 REASONING_RE = re.compile(r"@(%s)$" % "|".join(REASONING_LEVELS))
-# the gpt-oss level the temperature experiment runs at
 TEMPERATURE_EXPERIMENT_THINK = "low"
-# the temperature level the reasoning experiment runs at (gpt-oss's recommended sampling)
 REASONING_TEMPERATURE = "medium"
+
+T975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
+        2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086,
+        2.080, 2.074, 2.069, 2.064, 2.060, 2.056, 2.052, 2.048, 2.045, 2.042)
 
 GPT_OSS = "gpt-oss:20b"
 OTHER_MODELS = ["llama3.1:8b", "gemma3:12b"]
@@ -114,7 +120,6 @@ def sanitize(name: str) -> str:
 
 
 def recommended(model: str) -> dict:
-    # a spec ("gpt-oss:20b@low") or a results dir name ("gpt-oss_20b@low")
     base = sanitize(model.partition("@")[0])
     for name, sampling in RECOMMENDED.items():
         if sanitize(name) == base:
@@ -131,7 +136,6 @@ def temperature_for(model: str, temp: str) -> float:
 
 
 def options_for(model: str, temp: str, seed: int, num_ctx: int) -> dict:
-    # the full `options` object sent to ollama: only the temperature varies by level
     return dict(recommended(model), temperature=temperature_for(model, temp),
                 num_ctx=num_ctx, seed=seed)
 
@@ -158,10 +162,28 @@ def seed_dir(root, temp: str, seed: int) -> Path:
 
 
 def seed_dirs(root, temp: str) -> list:
-    # every seed_<n>/ already on disk, by seed -- whichever seeds were actually run
     base = temp_dir(root, temp)
     if not base.is_dir():
         return []
     found = [(int(m.group(1)), p) for p in base.iterdir()
              if p.is_dir() for m in [SEED_RE.match(p.name)] if m]
     return sorted(found)
+
+
+def t975(df: int) -> float:
+    if df < 1:
+        raise ValueError("df must be >= 1, got %d" % df)
+    if df <= len(T975):
+        return T975[df - 1]
+    z = 1.959964
+    return z + (z ** 3 + z) / (4 * df) + (5 * z ** 5 + 16 * z ** 3 + 3 * z) / (96 * df ** 2)
+
+
+def mean_ci(rates):
+    if not rates:
+        return 0.0, None, None
+    mean = sum(rates) / len(rates)
+    if len(rates) < 2:
+        return mean, None, None
+    std = statistics.stdev(rates)
+    return mean, std, t975(len(rates) - 1) * std / math.sqrt(len(rates))

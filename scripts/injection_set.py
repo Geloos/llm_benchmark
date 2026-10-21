@@ -25,6 +25,10 @@ What it outputs:
   Single-stage entries get a one-element `stages` list and source_ids == [id].
   A rotating row's stage is {"rotate": "clockwise", "variants": [{"guess", "payload",
   "tag"}, ...]} instead; inject_prompts.pick_stage() resolves it per marker.
+
+  SEPARATE_CATEGORIES names the categories summarize_results.py and plot_results.py keep
+  out of the ASR and report on their own (dovsdofs: the same direct override without and
+  with a SYSTEM: marker).
 """
 
 import json
@@ -34,6 +38,11 @@ import sys
 STAGE_RE = re.compile(r'^(?P<base>.+_\d+)(?P<stage>[ab])(?P<rest>_.*)?$')
 
 STAGE_WORD_RE = re.compile(r'_(?:primer|activation)(?=_|$)')
+
+SEPARATE_CATEGORIES = {
+    'dovsdofs': 'Direct override vs the same with a SYSTEM: marker',
+}
+BASE_VARIANT = 'nomarker'
 
 REQUIRED_KEYS = ('id', 'payload', 'tag')
 VARIANT_KEYS = ('guess', 'payload', 'tag')

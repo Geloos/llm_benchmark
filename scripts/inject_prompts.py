@@ -39,9 +39,6 @@ import injection_set
 
 MARKER_UNDERSCORED = 'this_is_the_injection'
 MARKER_SPACED = 'this is the injection'
-# auditd hexes a field it cannot leave as a bare token, so BOTH corpora hold a hexed form:
-# the wrapped `bash -c '...' "<marker>"` command lines have spaces regardless of which
-# marker form sits inside them. Miss either hex form and ~19% of the sites go uninjected.
 MARKER_HEX = MARKER_SPACED.encode('utf-8').hex().upper()
 MARKER_HEX_UNDERSCORED = MARKER_UNDERSCORED.encode('utf-8').hex().upper()
 HEX_MARKERS = (MARKER_HEX, MARKER_HEX_UNDERSCORED)
@@ -60,9 +57,6 @@ def pick_stage(injection, occurrence_index):
     stage = stages[min(occurrence_index, len(stages) - 1)]
     variants = stage.get('variants')
     if variants:
-        # clockwise: the guess advances one variant per marker, keyed on the file-wide
-        # marker index -- so a staged VG_ primer (marker 0) takes variant 0 and its
-        # activations carry on from variant 1, wrapping round.
         return variants[occurrence_index % len(variants)]
     return stage
 
@@ -100,11 +94,8 @@ def inject_line(line, next_stage):
         stage = next_stage()
         token = match.group(0)
         if token in (MARKER_HEX, MARKER_SPACED):
-            # attack_logs_hexa/ only: the hex lane is hex at EVERY site, free text included,
-            # so no readable copy of the payload (Apache UA, sshd, mysql) carries the result
             return to_audit_hex(stage['payload'])
         if token == MARKER_HEX_UNDERSCORED:
-            # attack_logs/ only, where every auditd surface carries the tag
             return to_audit_hex(stage['tag'])
         return escape(stage[variant])
 

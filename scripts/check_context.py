@@ -71,9 +71,6 @@ def probe(model: str, log_text: str, num_ctx: int) -> dict:
 
 
 def gpu_split(model: str) -> dict:
-    # what `ollama ps` shows for a loaded model: how much of it sits in VRAM. Read right
-    # after a probe, which keeps the model loaded (keep_alive 5m) at the real num_ctx, so
-    # the size includes that window's KV cache. Informational: CPU offload is allowed.
     try:
         loaded = requests.get(PS_URL, timeout=30).json().get("models") or []
     except Exception as e:

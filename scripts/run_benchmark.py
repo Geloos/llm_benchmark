@@ -136,12 +136,10 @@ def wanted_file(stem: str, include, exclude) -> bool:
 
 
 def api_url(endpoint: str) -> str:
-    # /api/show, /api/version, /api/tags, /api/ps on the same server as OLLAMA_URL
     return OLLAMA_URL.rsplit("/api/", 1)[0] + "/api/" + endpoint
 
 
 def parse_modelfile_parameters(text: str) -> dict:
-    # /api/show "parameters" is one "key value" per line; a repeated key (stop) is a list
     out = {}
     for line in (text or "").splitlines():
         key, _, value = line.strip().partition(" ")
@@ -160,7 +158,6 @@ def parse_modelfile_parameters(text: str) -> dict:
 
 
 def engine_info(model: str) -> dict:
-    # every lookup is best-effort: a failure is recorded in the file, it never stops the run
     base, _ = experiment.parse_model(model)
     info = {"engine": "ollama", "engine_url": OLLAMA_URL}
     try:
@@ -177,7 +174,6 @@ def engine_info(model: str) -> dict:
         info["trained_context_length"] = next(
             (int(v) for k, v in (show.get("model_info") or {}).items()
              if k.endswith(".context_length")), None)
-        # what applies to any sampling key not sent (repeat_penalty); the rest are overridden
         info["modelfile_parameters"] = parse_modelfile_parameters(show.get("parameters"))
     except Exception as e:
         info["show_error"] = str(e)
@@ -227,8 +223,6 @@ def write_run_config(path: Path, settings: dict) -> None:
 
 
 def stale_results(model_dir: Path, options: dict):
-    # results already in this folder from other options would be skipped and reported as
-    # this run's -- e.g. an old temp_low/ that held temperature 0.3
     if not any(model_dir.glob("results_*/*.txt")):
         return None
     path = model_dir / "run_config.json"
@@ -246,7 +240,6 @@ def stale_results(model_dir: Path, options: dict):
 
 
 def write_token_usage(model_dir: Path, model: str, temp_label: str, options: dict) -> dict:
-    # rebuilt from every sidecar in the folder, so calls skipped on a resumed run count too
     def empty():
         return dict({k: 0 for k in TOKEN_KEYS}, calls=0, errors=0,
                     **{f"{d}_s": 0.0 for d in DURATIONS})
@@ -306,7 +299,6 @@ def classify(model: str, log_text: str, options: dict) -> dict:
         "options": options,
     }
     if think:
-        # only for an explicit @level: llama3.1 and gemma3 reject the think field
         body["think"] = think
     resp = requests.post(OLLAMA_URL, json=body)
     resp.raise_for_status()
@@ -324,8 +316,6 @@ def truncation_flag(prompt_tokens: int, num_ctx: int) -> str:
 
 
 def keep_truncated(dest: Path, log_file: Path, reply: Path, meta: Path) -> Path:
-    # copies, not moves: the result stays in place (flagged by its sidecar and the
-    # truncated column in verdicts.csv) so a re-run skips it instead of looping on it
     dest.mkdir(parents=True, exist_ok=True)
     shutil.copy2(log_file, dest / f"{log_file.stem}.input.txt")
     shutil.copy2(reply, dest / reply.name)
@@ -381,8 +371,8 @@ def main() -> None:
         args.models = experiment.models_for(args.temperature)
     for model in args.models:
         try:
-            experiment.parse_model(model)      # reject a bad @level before any call
-            experiment.recommended(model)      # and a model with no sampling config
+            experiment.parse_model(model)
+            experiment.recommended(model)
         except ValueError as e:
             sys.exit(f"ERROR: {e}")
     if args.seeds is None:
@@ -462,7 +452,6 @@ def run_seed(args, seed: int, txt_by_folder: dict, progress: dict, flags: dict) 
                     print(f"[{done}/{total}] s{seed} {model:22} {folder.name}/{txt.name} -> skip")
                     continue
                 if not config_written:
-                    # before the first call this session makes, not for a fully skipped run
                     write_run_config(model_dir / "run_config.json",
                                      run_settings(model, args.temperature, options))
                     config_written = True

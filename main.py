@@ -32,7 +32,7 @@ What it outputs:
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
   low / medium = 0.0 (greedy) / recommended, per model. Two experiments
   share the run, every series repeated 5 times (seeds 42..46, one seed_<n>/ folder each)
-  and reported as mean +- std:
+  and reported as ASR mean +- 95% CI (and the std):
     temperature  every level x gpt-oss@low, llama3.1, gemma3;
     reasoning    medium x gpt-oss@low / @medium / @high. medium x gpt-oss@low is the
                  temperature experiment's run too, so only @medium and @high are extra.
@@ -78,8 +78,6 @@ LANE_SETS = {
     "both": ("plain", "hexa"),
 }
 
-# the temperature levels each lane runs; --temperatures narrows these, never widens them.
-# hexa runs greedy (low) only, so the cross-lane chart exists at temp_low alone
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
     "hexa": ("low",),
