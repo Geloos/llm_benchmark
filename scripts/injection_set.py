@@ -26,9 +26,10 @@ What it outputs:
   A rotating row's stage is {"rotate": "clockwise", "variants": [{"guess", "payload",
   "tag"}, ...]} instead; inject_prompts.pick_stage() resolves it per marker.
 
-  SEPARATE_CATEGORIES names the categories summarize_results.py and plot_results.py keep
-  out of the ASR and report on their own (dovsdofs: the same direct override without and
-  with a SYSTEM: marker).
+  PAIRED_CATEGORIES names the categories whose ids are <pair>_<variant>, one variant
+  being BASE_VARIANT (dovsdofs: the same direct override without and with a SYSTEM:
+  marker, in jailbreaks/dovsdofs.jsonl, run as its own lane). summarize_results.py and
+  plot_results.py read them with --paired: a paired t-test per model and one chart.
 """
 
 import json
@@ -39,7 +40,7 @@ STAGE_RE = re.compile(r'^(?P<base>.+_\d+)(?P<stage>[ab])(?P<rest>_.*)?$')
 
 STAGE_WORD_RE = re.compile(r'_(?:primer|activation)(?=_|$)')
 
-SEPARATE_CATEGORIES = {
+PAIRED_CATEGORIES = {
     'dovsdofs': 'Direct override vs the same with a SYSTEM: marker',
 }
 BASE_VARIANT = 'nomarker'

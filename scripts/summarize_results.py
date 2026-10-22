@@ -19,6 +19,8 @@ What it does:
 How to run it:
   python3 summarize_results.py --results-root results --out-dir analysis \
       --temperature low --lane plain --injections jailbreaks/injections.jsonl
+  python3 summarize_results.py --results-root results_dovsdofs --out-dir analysis_dovsdofs \
+      --temperature low --lane dovsdofs --injections jailbreaks/dovsdofs.jsonl --paired
 
   Every root gets temp_<t>/ appended (experiment.temp_dir), so the line above reads
   every results/temp_low/seed_<n>/ on disk and writes analysis/temp_low/. The seeds are
@@ -57,10 +59,17 @@ What it outputs (under analysis/temp_<t>/):
   report.md               human-readable, per model: counts, the ranking table
                           (ASR +- 95% CI, and the std), and every file in each bucket
                           with its seed.
-  <category>_report.md    the same, for one of injection_set.SEPARATE_CATEGORIES alone
-                          (dovsdofs_report.md). Those categories are a separate experiment:
-                          their rows are in the two CSVs, but not in summary.jsonl or in
-                          report.md's counts, ASR and ranking.
+  paired_ttest.csv        --paired only (the DOVSDOFS lane, analysis_dovsdofs/): one row
+                          per model x pair x marked variant, the paired t-test of that
+                          variant against injection_set.BASE_VARIANT (nomarker) across the
+                          seeds. Ids are <pair>_<variant>; seed i of one variant pairs with
+                          seed i of the other (same model, logs and seed):
+                          model,pair,variant,seeds,base_asr_per_seed,marked_asr_per_seed,
+                          base_mean,base_ci95,marked_mean,marked_ci95,dbar,t,df,p,
+                          significant,significant_bonferroni,direction
+                          dbar = mean(marked - base); p is exact (experiment.paired_t);
+                          significant = p < 0.05, significant_bonferroni = p < 0.05 / the
+                          number of tests. report.md gains the same as a table.
   reasoning_report.md     the same sections for the gpt-oss @low/@medium/@high runs only,
                           side by side in that order -- written only where more than one
                           level is present (temperature medium, the reasoning experiment).
@@ -366,14 +375,108 @@ def write_jsonl(summaries, path: Path) -> None:
             fh.write(json.dumps(out) + "\n")
 
 
-def split_separate(per_model: dict, categories: dict):
-    main = defaultdict(list)
-    separate = {c: defaultdict(list) for c in injection_set.SEPARATE_CATEGORIES}
-    for model, entries in per_model.items():
-        for entry in entries:
-            category = categories.get(entry[2], "unknown")
-            (separate[category] if category in separate else main)[model].append(entry)
-    return main, {c: by_model for c, by_model in separate.items() if by_model}
+def paired_tests(flat):
+    by_seed = defaultdict(lambda: defaultdict(list))
+    for r in flat:
+        pair, _, variant = r["injection"].rpartition("_")
+        by_seed[(r["model"], pair, variant)][r["seed"]].append(r["tricked"])
+
+    tests = []
+    for (model, pair, variant), marked in sorted(by_seed.items()):
+        if variant == injection_set.BASE_VARIANT:
+            continue
+        base = by_seed.get((model, pair, injection_set.BASE_VARIANT))
+        if base is None:
+            print(f"WARNING: {model} {pair}_{variant} has no "
+                  f"{pair}_{injection_set.BASE_VARIANT} to pair with -- not tested")
+            continue
+        seeds = sorted(set(base) & set(marked))
+        if seeds != sorted(set(base) | set(marked)):
+            print(f"WARNING: {model} {pair}: {injection_set.BASE_VARIANT} has seeds "
+                  f"{sorted(base)}, {variant} {sorted(marked)} -- testing the shared "
+                  f"{seeds} only")
+        base_rates = [sum(base[x]) / len(base[x]) for x in seeds]
+        marked_rates = [sum(marked[x]) / len(marked[x]) for x in seeds]
+        base_mean, _, base_ci = experiment.mean_ci(base_rates)
+        marked_mean, _, marked_ci = experiment.mean_ci(marked_rates)
+        test = experiment.paired_t(base_rates, marked_rates) or {}
+        dbar = test.get("dbar", marked_mean - base_mean)
+        tests.append({
+            "model": model, "pair": pair, "variant": variant, "seeds": len(seeds),
+            "base_asr_per_seed": ";".join(f"{x:.3f}" for x in base_rates),
+            "marked_asr_per_seed": ";".join(f"{x:.3f}" for x in marked_rates),
+            "base_mean": round(base_mean, 3), "base_ci95": rounded(base_ci),
+            "marked_mean": round(marked_mean, 3), "marked_ci95": rounded(marked_ci),
+            "dbar": round(dbar, 3),
+            "t": test.get("t"), "df": test.get("df"), "p": test.get("p"),
+            "direction": (f"{variant} > {injection_set.BASE_VARIANT}" if dbar > 0 else
+                          f"{injection_set.BASE_VARIANT} > {variant}" if dbar < 0 else
+                          "identical"),
+        })
+    alpha = 0.05 / len(tests) if tests else 0.05
+    for t in tests:
+        t["significant"] = int(t["p"] is not None and t["p"] < 0.05)
+        t["significant_bonferroni"] = int(t["p"] is not None and t["p"] < alpha)
+        if t["t"] is not None and abs(t["t"]) != float("inf"):
+            t["t"] = round(t["t"], 3)
+        if t["p"] is not None:
+            t["p"] = float(f"{t['p']:.4g}")
+    return tests, alpha
+
+
+def fmt_p(p) -> str:
+    if p is None:
+        return "-"
+    return "<0.001" if p < 0.001 else f"{p:.3f}"
+
+
+def verdict_of(t: dict) -> str:
+    if t["p"] is None:
+        return "identical, no difference" if t["direction"] == "identical" else "-"
+    if t["p"] < 0.01:
+        return "significant (p < 0.01)"
+    if t["p"] < 0.05:
+        return "significant (p < 0.05)"
+    return "not significant"
+
+
+def ttest_lines(tests, alpha) -> list:
+    if not tests:
+        return []
+    variant = tests[0]["variant"]
+    base = injection_set.BASE_VARIANT
+    up = sum(1 for t in tests if t["dbar"] > 0)
+    down = sum(1 for t in tests if t["dbar"] < 0)
+    lines = ["## Paired t-test", "",
+             f"Per model, the per-seed ASR of `{variant}` minus that of `{base}` (same "
+             f"model, logs and seed, so seed i pairs with seed i). d = mean difference "
+             f"(positive = the marker helped the injection), t = d / (std / sqrt(n)), "
+             f"df = n - 1, p two-sided and exact.", "",
+             f"| model | pair | {base} ASR +- 95% CI | {variant} ASR +- 95% CI | d | t "
+             f"| p | verdict | Bonferroni (p < {alpha:.4f}) | direction |",
+             "|---|---|---:|---:|---:|---:|---:|---|---|---|"]
+    for t in tests:
+        tval = "-" if t["t"] is None else f"{t['t']:.2f}"
+        lines.append(
+            f"| {t['model']} | {t['pair']} | {fmt_ci(t['base_mean'], t['base_ci95'])} | "
+            f"{fmt_ci(t['marked_mean'], t['marked_ci95'])} | {t['dbar']:+.3f} | {tval} | "
+            f"{fmt_p(t['p'])} | {verdict_of(t)} | "
+            f"{'yes' if t['significant_bonferroni'] else 'no'} | {t['direction']} |")
+    lines += ["",
+              f"Pattern: {variant} > {base} for {up} of {len(tests)} model(s), {base} > "
+              f"{variant} for {down}; significant at p < 0.05 for "
+              f"{sum(t['significant'] for t in tests)}, after Bonferroni for "
+              f"{sum(t['significant_bonferroni'] for t in tests)}.", "",
+              f"- n = {tests[0]['seeds']} seeds per model is low power: \"not significant\" "
+              f"means no difference detectable at this n, not that there is none. The "
+              f"direction is reported either way.",
+              "- This compares this one string pair, not markers in general.",
+              f"- {len(tests)} comparison(s), one per model; Bonferroni divides 0.05 by "
+              f"that count.",
+              "- The chart's CIs are per variant (unpaired), so they can overlap while the "
+              "paired test is significant: pairing removes the noise the two share per "
+              "seed. The paired test is the verdict.", ""]
+    return lines
 
 
 def write_report(summaries, path: Path, title: str = "Benchmark results summary",
@@ -452,10 +555,14 @@ def parse_args():
                     help="which temp_<t>/ folder to read and write: low or medium "
                          "(default: medium)")
     ap.add_argument("--lane", default="plain",
-                    help="the encoding lane written into verdicts.csv's lane column: plain "
-                         "or hexa (default: plain)")
+                    help="the lane written into verdicts.csv's lane column: plain, hexa "
+                         "or dovsdofs (default: plain)")
     ap.add_argument("--injections", default="jailbreaks/injections.jsonl",
                     help="injections jsonl, for category enrichment")
+    ap.add_argument("--paired", action="store_true",
+                    help="the injections are <pair>_<variant> pairs (the DOVSDOFS lane): "
+                         "also run a paired t-test per model, into paired_ttest.csv and "
+                         "report.md")
     return ap.parse_args()
 
 
@@ -477,21 +584,14 @@ def main() -> None:
         print(f"WARNING: {len(trunc)} call(s) were TRUNCATED -- flagged truncated=1 in "
               f"verdicts.csv, copies under truncated/")
 
-    main_per_model, separate = split_separate(per_model, categories)
-    summaries = [summarize_model(m, main_per_model[m], categories, trunc)
-                 for m in sorted(main_per_model)]
-    separate_summaries = {
-        category: [summarize_model(m, by_model[m], categories, trunc) for m in sorted(by_model)]
-        for category, by_model in separate.items()
-    }
-    for label, group in [("", summaries)] + [(f" [{c}]", g) for c, g in
-                                             separate_summaries.items()]:
-        for s in group:
-            if (len(set(s["calls_per_seed"].values())) > 1
-                    or len(s["seeds"]) < len(seed_dirs)):
-                print(f"WARNING: {s['model']}{label} has an uneven number of results per "
-                      f"seed ({s['calls_per_seed']}) -- a seed run is incomplete, finish it "
-                      f"before reading the std / CI")
+    summaries = [summarize_model(m, per_model[m], categories, trunc)
+                 for m in sorted(per_model)]
+    for s in summaries:
+        if (len(set(s["calls_per_seed"].values())) > 1
+                or len(s["seeds"]) < len(seed_dirs)):
+            print(f"WARNING: {s['model']} has an uneven number of results per "
+                  f"seed ({s['calls_per_seed']}) -- a seed run is incomplete, finish it "
+                  f"before reading the std / CI")
     flat = verdict_rows(per_model, categories, trunc, args.lane, args.temperature)
     rolled = rollup_rows(flat)
 
@@ -505,22 +605,30 @@ def main() -> None:
                "tricked_count", "trick_rate", "trick_rate_std", "trick_rate_ci95",
                "tricked_any"])
     write_jsonl(summaries, out_dir / "summary.jsonl")
-    left_out = ", ".join(f"{c} (see {c}_report.md)" for c in separate_summaries)
-    write_report(summaries, out_dir / "report.md",
-                 note=f"Kept out of the ASR and the ranking: {left_out}." if left_out else "")
+    tests, alpha = paired_tests(flat) if args.paired else ([], 0.05)
+    if args.paired:
+        title = " / ".join(injection_set.PAIRED_CATEGORIES.get(c, c) for c in
+                           sorted({r["category"] for r in flat}))
+        write_report(summaries, out_dir / "report.md", title,
+                     note="A separate experiment with its own lane: the ASR below is over "
+                          "these injections alone.")
+        with open(out_dir / "report.md", "a", encoding="utf-8") as fh:
+            fh.write("\n\n" + "\n".join(ttest_lines(tests, alpha)))
+        write_csv(tests, out_dir / "paired_ttest.csv",
+                  ["model", "pair", "variant", "seeds", "base_asr_per_seed",
+                   "marked_asr_per_seed", "base_mean", "base_ci95", "marked_mean",
+                   "marked_ci95", "dbar", "t", "df", "p", "significant",
+                   "significant_bonferroni", "direction"])
+    else:
+        write_report(summaries, out_dir / "report.md")
 
     rank = {level: i for i, level in enumerate(experiment.REASONING_LEVELS)}
     reasoning = sorted((s for s in summaries if experiment.reasoning_level(s["model"])),
                        key=lambda s: rank[experiment.reasoning_level(s["model"])])
     written = [out_dir / "verdicts.csv", out_dir / "verdicts_by_injection.csv",
                out_dir / "summary.jsonl", out_dir / "report.md"]
-    for category, group in separate_summaries.items():
-        path = out_dir / f"{category}_report.md"
-        write_report(group, path,
-                     f"{injection_set.SEPARATE_CATEGORIES[category]} ({category})",
-                     note=f"A separate experiment: these injections are not in report.md's "
-                          f"ASR or ranking, and the ASR below is over {category} alone.")
-        written.append(path)
+    if args.paired:
+        written.append(out_dir / "paired_ttest.csv")
     if len(reasoning) > 1:
         write_report(reasoning, out_dir / "reasoning_report.md",
                      "gpt-oss reasoning effort: " + " vs ".join(
@@ -535,11 +643,15 @@ def main() -> None:
               f"neutral={c['neutral']:4} benign={c['benign']:4} "
               f"unparseable={c['unparseable']:4} error={c['error']:4}  "
               f"ASR {fmt_ci(s['trick_rate'], s['trick_rate_ci95'])}")
-    for category, group in separate_summaries.items():
-        print(f"\n{category} (separate, not in the ASR above):")
-        for s in group:
-            print(f"{s['model']:24} files={s['files_seen']:5}  "
-                  f"ASR {fmt_ci(s['trick_rate'], s['trick_rate_ci95'])}")
+    if tests:
+        print(f"\npaired t-test, {tests[0]['variant']} vs {injection_set.BASE_VARIANT} "
+              f"(Bonferroni p < {alpha:.4f}):")
+        for t in tests:
+            tval = "-" if t["t"] is None else f"{t['t']:.2f}"
+            print(f"  {t['model']:24} {t['pair']:12} "
+                  f"{injection_set.BASE_VARIANT} {t['base_mean']:.2f}  "
+                  f"{t['variant']} {t['marked_mean']:.2f}  d {t['dbar']:+.3f}  t {tval}  "
+                  f"p {fmt_p(t['p'])}  {verdict_of(t)}")
     unknown = sum(1 for r in flat if r["category"] == "unknown")
     if unknown:
         print(f"\nWARNING: {unknown} rows have category=unknown -- result files whose "

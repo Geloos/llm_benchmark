@@ -26,10 +26,13 @@ What it does:
   - top injections: one PNG with a panel per model, each that model's --top strongest
     injections ranked by trick rate (ties broken by the smaller std, then the id), and
     the same panel again as one PNG per model.
-  - separate categories (injection_set.SEPARATE_CATEGORIES, e.g. dovsdofs): left out of
-    every chart above and of --compare, and drawn on their own instead -- a group per
-    model on the x-axis, two bars side by side: orange = the nomarker baseline, blue =
-    the marked variant (SYSTEM:). A second pair (DOVSDOFS_02) adds a group per model.
+
+  --paired (the DOVSDOFS lane, analysis_dovsdofs/) draws one chart instead: a group per
+  model on the x-axis, every model present (gpt-oss@medium included), two bars side by
+  side: orange = the nomarker baseline (injection_set.BASE_VARIANT), blue = the marked
+  variant (SYSTEM:). Above each pair, the paired t-test's p from paired_ttest.csv
+  (summarize_results.py --paired), ** p < 0.01, * p < 0.05, n.s. otherwise. A second pair
+  (DOVSDOFS_02) adds a group per model.
 
 How to run it:
   python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
@@ -38,6 +41,7 @@ How to run it:
   python3 plot_results.py --top 10                 # 10 injections per panel (default 5)
   python3 plot_results.py --no-reasoning --no-top  # skip the two extra views
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
+  python3 plot_results.py --analysis-dir analysis_dovsdofs/temp_low --paired
 
 What it outputs:
   analysis/charts/trick_rate_by_category.png    the overview, a group per category
@@ -49,10 +53,11 @@ What it outputs:
   analysis/trick_rate_by_category.csv           the numbers behind the overview
   analysis/reasoning_by_category.csv            ... behind the reasoning overview
   analysis/top_injections.csv                   ... behind the top-injections panels
-  analysis/charts/<category>.png                a separate category, e.g. dovsdofs.png
-  analysis/<category>.csv                       ... the numbers behind it
   analysis/report.md                            gains a "## Charts" section, rewritten in
                                                 place on every run
+
+  With --paired, ONLY the pair chart (named after the category) and its numbers:
+  analysis_dovsdofs/temp_low/charts/dovsdofs.png  +  analysis_dovsdofs/temp_low/dovsdofs.csv
 
   With --compare, ONLY the cross-lane pair, and report.md is left untouched:
   analysis/charts/plain_vs_hexa.png  +  analysis/plain_vs_hexa.csv
@@ -98,16 +103,6 @@ SENTINEL = "<!-- charts:begin -->"
 def read_verdicts(path: Path):
     with open(path, newline="", encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
-
-
-def split_separate(rows):
-    main, separate = [], defaultdict(list)
-    for r in rows:
-        if r.get("category") in injection_set.SEPARATE_CATEGORIES:
-            separate[r["category"]].append(r)
-        else:
-            main.append(r)
-    return main, separate
 
 
 def usable(r) -> bool:
@@ -255,7 +250,7 @@ def injection_label(injection: str) -> str:
 
 def render(stats, models, groups, title: str, out_path: Path, label_fn,
            style_fn=None, series_label=None, fig_width=None, bar_labels=True,
-           legend_ncol=None) -> Path:
+           legend_ncol=None, group_notes=None) -> Path:
     style_fn = style_fn or (lambda series, slot: {"color": SERIES[slot]})
     series_label = series_label or (lambda series: series)
     import matplotlib
@@ -281,6 +276,7 @@ def render(stats, models, groups, title: str, out_path: Path, label_fn,
     ax.set_facecolor(t["surface"])
 
     xs = list(range(len(groups)))
+    tops = [0.0] * len(groups)
     for slot, model in enumerate(models):
         offset = (slot - (len(models) - 1) / 2) * (group_w / len(models))
         bar_xs = [x + offset for x in xs]
@@ -291,6 +287,7 @@ def render(stats, models, groups, title: str, out_path: Path, label_fn,
 
         lower = [min(c, v) if c is not None else 0.0 for v, c in zip(values, cis)]
         upper = [min(c, 1 - v) if c is not None else 0.0 for v, c in zip(values, cis)]
+        tops = [max(top, v + up) for top, v, up in zip(tops, values, upper)]
         whisk = [i for i, c in enumerate(cis) if c is not None]
         if whisk:
             ax.errorbar([bar_xs[i] for i in whisk], [values[i] for i in whisk],
@@ -304,6 +301,12 @@ def render(stats, models, groups, title: str, out_path: Path, label_fn,
                     ax.annotate(f"{v:.0%}", (x, v + up), xytext=(0, 2),
                                 textcoords="offset points", ha="center", va="bottom",
                                 fontsize=6.5, color=t["muted"])
+
+    for x, g, top in zip(xs, groups, tops):
+        if group_notes and group_notes.get(g):
+            ax.annotate(group_notes[g], (x, top), xytext=(0, 13),
+                        textcoords="offset points", ha="center", va="bottom",
+                        fontsize=8, color=t["secondary"], annotation_clip=False)
 
     ax.set_ylim(0, 1)
     ax.yaxis.set_major_locator(MultipleLocator(0.2))
@@ -422,8 +425,28 @@ def render_top(stats, top, slot_of, title: str, out_path: Path) -> Path:
     return out_path
 
 
+def embed_paired(report_path: Path, image: Path, twin: Path) -> bool:
+    if not report_path.is_file():
+        return False
+    base = report_path.parent
+
+    def rel(p):
+        return os.path.relpath(p, base).replace("\\", "/")
+
+    head = report_path.read_text(encoding="utf-8").split(SENTINEL)[0].rstrip()
+    block = [SENTINEL, "", "## Chart", "",
+             f"![{image.stem}]({rel(image)})", "",
+             f"A group per model, two bars side by side: orange the "
+             f"`{injection_set.BASE_VARIANT}` variant, blue the marked one. Bar = ASR mean "
+             f"across the seeds, whisker = its 95% CI; above each pair, the paired t-test's "
+             f"p (** p < 0.01, * p < 0.05, n.s. otherwise). The counts are in "
+             f"[`{rel(twin)}`]({rel(twin)}), the test in `paired_ttest.csv`.", ""]
+    report_path.write_text(head + "\n\n" + "\n".join(block), encoding="utf-8")
+    return True
+
+
 def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
-                    reasoning=None, top=None, separate=()) -> bool:
+                    reasoning=None, top=None) -> bool:
     if not report_path.is_file():
         return False
     base = report_path.parent
@@ -458,13 +481,6 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
                   f"The ranking behind every panel is in [`{rel(csv_path)}`]"
                   f"({rel(csv_path)}); each panel is also a PNG of its own in "
                   f"`{rel(model_dir)}/`.", ""]
-    for title, image, csv_path in separate:
-        block += [f"### {title} (separate, not in the ASR)", "",
-                  f"![{title}]({rel(image)})", "",
-                  f"Kept out of every chart above. A group per model, two bars side by "
-                  f"side: orange the `{injection_set.BASE_VARIANT}` variant, blue the marked "
-                  f"one. The counts are in [`{rel(csv_path)}`]({rel(csv_path)}).",
-                  ""]
     if reasoning:
         image, csv_path, reasoning_per_category = reasoning
         block += ["### gpt-oss reasoning effort", "",
@@ -477,7 +493,22 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
     return True
 
 
-def separate_chart(category: str, rows, models, analysis_dir: Path, out_dir: Path):
+def read_ttests(path: Path) -> dict:
+    if not path.is_file():
+        return {}
+    out = {}
+    for r in read_verdicts(path):
+        if r.get("p", "") == "":
+            note = "identical" if r.get("direction") == "identical" else ""
+        else:
+            p = float(r["p"])
+            stars = "**" if p < 0.01 else "*" if p < 0.05 else "n.s."
+            note = ("p<0.001" if p < 0.001 else f"p={p:.3f}") + f" {stars}"
+        out[(r["pair"], r["model"])] = note
+    return out
+
+
+def paired_chart(category: str, rows, models, analysis_dir: Path, out_dir: Path):
     for r in rows:
         r["pair"], _, r["variant"] = r["injection"].rpartition("_")
         r["pair_model"] = (r["pair"], r["model"])
@@ -509,22 +540,49 @@ def separate_chart(category: str, rows, models, analysis_dir: Path, out_dir: Pat
               twin, ["model", "pair", "variant", "injection", "seen", *BUCKETS, "seeds",
                      "trick_rate", "trick_rate_std", "trick_rate_ci95"])
 
-    title = injection_set.SEPARATE_CATEGORIES[category]
+    title = injection_set.PAIRED_CATEGORIES.get(category, category)
     label = (lambda g: g[1]) if len(pairs) == 1 else (lambda g: f"{g[1]}\n{g[0]}")
+    notes = read_ttests(analysis_dir / "paired_ttest.csv")
+    if not notes:
+        print(f"note: no {analysis_dir / 'paired_ttest.csv'} -- the chart has no p-values "
+              f"(run summarize_results.py --paired first)")
     image = render(stats, variants, groups, title, out_dir / f"{category}.png", label,
                    style_fn=lambda v, _slot: {"color": hue_of[v]},
-                   legend_ncol=len(variants))
+                   legend_ncol=len(variants), group_notes=notes)
 
-    print(f"{category} (separate, not in the ASR) -- delta is vs "
-          f"'{injection_set.BASE_VARIANT}':")
+    print(f"{category} -- delta is vs '{injection_set.BASE_VARIANT}':")
     for p, m in groups:
         rates = [(v, stats[(v, (p, m))][0]) for v in variants if (v, (p, m)) in stats]
         base = dict(rates).get(injection_set.BASE_VARIANT)
         parts = [f"{v} {rate:.0%}" + ("" if base is None or v == injection_set.BASE_VARIANT
                                       else f" ({rate - base:+.0%})")
                  for v, rate in rates]
-        print(f"  {m:24} {p:14} " + "   ".join(parts))
-    return title, image, twin
+        print(f"  {m:24} {p:14} " + "   ".join(parts) + f"   {notes.get((p, m), '')}")
+    return image, twin
+
+
+def run_paired(analysis_dir: Path, out_dir: Path, args) -> None:
+    verdicts = analysis_dir / "verdicts.csv"
+    if not verdicts.is_file():
+        sys.exit(f"ERROR: {verdicts} not found -- run the analysis step first:\n"
+                 f"  python main.py --dovsdofs --skip-inject --skip-benchmark")
+    by_category = defaultdict(list)
+    for r in read_verdicts(verdicts):
+        by_category[r.get("category", "")].append(r)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    drawn = []
+    for category in sorted(by_category):
+        models = sorted({r["model"] for r in by_category[category]})
+        result = paired_chart(category, by_category[category], models, analysis_dir,
+                              out_dir)
+        if result:
+            drawn.append(result)
+    if not drawn:
+        sys.exit(f"ERROR: no usable rows in {verdicts}")
+    if not args.no_report_embed and embed_paired(analysis_dir / "report.md", *drawn[0]):
+        print(f"embedded the chart in {analysis_dir / 'report.md'}")
+    for image, twin in drawn:
+        print(f"wrote {image} and {twin}")
 
 
 def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
@@ -537,7 +595,7 @@ def run_compare(args, analysis_dir: Path, out_dir: Path) -> None:
     if len(dirs) > len(LANE_HATCH):
         sys.exit(f"ERROR: {len(dirs)} lanes but only {len(LANE_HATCH)} hatch patterns.")
     baseline = labels[0]
-    rows, _ = split_separate(read_lanes(list(zip(dirs, labels))))
+    rows = read_lanes(list(zip(dirs, labels)))
     lane_series = lambda r: (r["model"], r["lane"])
     cells, unknown = aggregate(rows, "category", series_of=lane_series)
     stats = seed_stats(rows, "category", series_of=lane_series)
@@ -614,6 +672,10 @@ def parse_args():
                          "verdicts.csv alongside --analysis-dir's (e.g. --compare "
                          "analysis_hexa). report.md is left alone in this "
                          "mode; the output is named after the lane labels")
+    ap.add_argument("--paired", action="store_true",
+                    help="draw ONLY the pair chart (the DOVSDOFS lane): a group per model, "
+                         "orange = nomarker, blue = the marked variant, every model "
+                         "present, the paired t-test's p above each pair")
     ap.add_argument("--lane-labels", nargs="+", default=["plain", "hexa"],
                     metavar="LABEL",
                     help="one name per lane for the legend, the CSV and the output "
@@ -635,13 +697,16 @@ def main() -> None:
     if args.compare:
         run_compare(args, analysis_dir, out_dir)
         return
+    if args.paired:
+        run_paired(analysis_dir, out_dir, args)
+        return
 
     verdicts = analysis_dir / "verdicts.csv"
     if not verdicts.is_file():
         sys.exit(f"ERROR: {verdicts} not found -- run the analysis step first:\n"
                  f"  python main.py --skip-inject --skip-benchmark")
 
-    rows, separate_rows = split_separate(read_verdicts(verdicts))
+    rows = read_verdicts(verdicts)
     by_category, unknown = aggregate(rows, "category")
     category_stats = seed_stats(rows, "category")
     if not by_category:
@@ -717,14 +782,6 @@ def main() -> None:
                                       TOP_MODEL_TITLE, model_dir / f"{model}.png"))
         top = (image, top_csv, model_dir)
 
-    separate = []
-    for category in sorted(separate_rows):
-        drawn = separate_chart(category, separate_rows[category], models,
-                               analysis_dir, out_dir)
-        if drawn:
-            separate.append(drawn)
-            written.append(drawn[1])
-
     reasoning = None
     if not args.no_reasoning and len(levels) > 1:
         r_dir = out_dir / "reasoning"
@@ -766,7 +823,7 @@ def main() -> None:
 
     if not args.no_report_embed and embed_in_report(
             analysis_dir / "report.md", overview, twin, per_category,
-            reasoning=reasoning, top=top, separate=separate):
+            reasoning=reasoning, top=top):
         print(f"embedded the charts in {analysis_dir / 'report.md'}")
     print(f"wrote {twin} and {len(written)} chart(s) under {out_dir}")
 

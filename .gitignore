@@ -10,6 +10,9 @@ analysis/
 attack_logs_injected_hexa/
 results_hexa/
 analysis_hexa/
+attack_logs_injected_dovsdofs/
+results_dovsdofs/
+analysis_dovsdofs/
 truncated/
 
 # notebook checkpoints

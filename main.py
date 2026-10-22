@@ -12,6 +12,15 @@ How to run it:
   python main.py --corpus hexa       # the hex corpus (attack_logs_hexa/)
   python main.py --corpus both       # plain + hexa, then the comparison chart
   python main.py --temperatures low  # only level low (default: low medium)
+  python main.py --dovsdofs          # ONLY the DOVSDOFS lane
+  python main.py --skip-dovsdofs     # everything but the DOVSDOFS lane
+
+  The DOVSDOFS lane is a separate experiment -- one direct override without vs with a
+  SYSTEM: marker (jailbreaks/dovsdofs.jsonl) -- with its own folders:
+  attack_logs/ -> attack_logs_injected_dovsdofs/ -> results_dovsdofs/ -> analysis_dovsdofs/.
+  It runs at level low only, with gpt-oss@medium, llama3.1 and gemma3
+  (experiment.DOVSDOFS_MODELS), 5 seeds, and its analysis adds a paired t-test per model
+  (--paired). It runs after the --corpus lane(s) unless --skip-dovsdofs.
 
   The hexa lane runs level low only (LANE_TEMPERATURES), so the cross-lane chart is
   drawn at temp_low alone and --corpus hexa --temperatures medium runs nothing.
@@ -26,7 +35,9 @@ What it outputs:
   results*/ and analysis*/ (verdicts.csv,
   verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
   charts/), plus analysis*/context_check.csv. And the cross-lane chart
-  analysis/temp_low/charts/plain_vs_hexa.png.
+  analysis/temp_low/charts/plain_vs_hexa.png. The DOVSDOFS lane writes
+  analysis_dovsdofs/temp_low/: verdicts.csv, report.md (with the paired t-test),
+  paired_ttest.csv and charts/dovsdofs.png.
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
@@ -70,7 +81,15 @@ CORPORA = {
              "injected": "attack_logs_injected_hexa",
              "results": "results_hexa",
              "analysis": "analysis_hexa"},
+    "dovsdofs": {"attack_dir": "attack_logs",
+                 "injected": "attack_logs_injected_dovsdofs",
+                 "results": "results_dovsdofs",
+                 "analysis": "analysis_dovsdofs",
+                 "injections": "jailbreaks/dovsdofs.jsonl",
+                 "models": experiment.DOVSDOFS_MODELS,
+                 "paired": True},
 }
+DEFAULT_INJECTIONS = "jailbreaks/injections.jsonl"
 
 LANE_SETS = {
     "plain": ("plain",),
@@ -81,6 +100,7 @@ LANE_SETS = {
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
     "hexa": ("low",),
+    "dovsdofs": ("low",),
 }
 
 
@@ -108,6 +128,8 @@ def forward_flags(extra_args: list[str], keep: set[str]) -> list[str]:
 def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
     paths = CORPORA[lane]
     tag = f"[{lane}] " if labelled else ""
+    if "models" in paths:
+        benchmark_args = ["--models", *paths["models"]] + benchmark_args
 
     temps = lane_temperatures(lane, args)
     if not temps:
@@ -117,7 +139,8 @@ def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
 
     if not args.skip_inject:
         rc = run_step(f"{tag}STEP 1  inject prompts", INJECT,
-                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"]])
+                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"],
+                       "--injections", paths.get("injections", DEFAULT_INJECTIONS)])
         if rc != 0:
             print(f"\ninject step failed (exit {rc}); not running the benchmark.")
             return rc
@@ -162,7 +185,9 @@ def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: 
     if not args.skip_summary:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
                       ["--results-root", paths["results"],
-                       "--out-dir", paths["analysis"], "--lane", lane] + temp_args)
+                       "--out-dir", paths["analysis"], "--lane", lane,
+                       "--injections", paths.get("injections", DEFAULT_INJECTIONS)]
+                      + (["--paired"] if paths.get("paired") else []) + temp_args)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
             return rc
@@ -171,7 +196,8 @@ def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: 
 
     if not args.skip_charts:
         rc = run_step(f"{tag}STEP 4  plot charts", CHARTS,
-                      ["--analysis-dir", str(experiment.temp_dir(paths["analysis"], temp))])
+                      ["--analysis-dir", str(experiment.temp_dir(paths["analysis"], temp))]
+                      + (["--paired"] if paths.get("paired") else []))
         if rc != 0:
             print(f"\nchart step failed (exit {rc}).")
             return rc
@@ -242,18 +268,31 @@ def main() -> int:
                     help="skip step 4 (do not (re)draw the per-lane charts)")
     ap.add_argument("--skip-compare", action="store_true",
                     help="skip step 5 (the cross-lane comparison charts)")
+    dovsdofs = ap.add_mutually_exclusive_group()
+    dovsdofs.add_argument("--dovsdofs", action="store_true",
+                          help="run ONLY the DOVSDOFS lane (direct override without vs "
+                               "with a SYSTEM: marker): temp low, gpt-oss@medium, "
+                               "llama3.1, gemma3, into *_dovsdofs/ folders")
+    dovsdofs.add_argument("--skip-dovsdofs", action="store_true",
+                          help="do not run the DOVSDOFS lane after the --corpus lane(s)")
     args, benchmark_args = ap.parse_known_args()
 
-    lanes = LANE_SETS[args.corpus]
-    for lane in lanes:
-        rc = run_lane(lane, args, benchmark_args, labelled=len(lanes) > 1)
+    if not args.dovsdofs:
+        lanes = LANE_SETS[args.corpus]
+        for lane in lanes:
+            rc = run_lane(lane, args, benchmark_args, labelled=True)
+            if rc != 0:
+                return rc
+
+        rc = run_compare(args)
         if rc != 0:
+            print(f"\ncomparison step failed (exit {rc}).")
             return rc
 
-    rc = run_compare(args)
-    if rc != 0:
-        print(f"\ncomparison step failed (exit {rc}).")
-        return rc
+    if not args.skip_dovsdofs:
+        rc = run_lane("dovsdofs", args, benchmark_args, labelled=True)
+        if rc != 0:
+            return rc
 
     print("\ndone.")
     return 0

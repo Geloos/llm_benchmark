@@ -44,6 +44,12 @@ What it outputs:
                      half-width of its two-sided 95% Student-t confidence interval,
                      t(0.975, n-1) * std / sqrt(n). Shared by summarize_results.py and
                      plot_results.py so the report and the whiskers agree.
+      paired t-test  paired_t(base, marked): the per-seed differences marked - base, their
+                     mean, t = mean / (std / sqrt(n)) and the exact two-sided p from the
+                     Student-t CDF (t_pvalue(), a regularized incomplete beta; stdlib has
+                     no t). Used for the DOVSDOFS lane, whose two variants share model,
+                     logs and seed, so seed i of one pairs with seed i of the other.
+      DOVSDOFS lane  DOVSDOFS_MODELS: gpt-oss@medium, llama3.1, gemma3, at level low only.
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
 """
 
@@ -76,6 +82,7 @@ T975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
 
 GPT_OSS = "gpt-oss:20b"
 OTHER_MODELS = ["llama3.1:8b", "gemma3:12b"]
+DOVSDOFS_MODELS = ["%s@medium" % GPT_OSS] + OTHER_MODELS
 
 
 def check_level(temp: str) -> None:
@@ -187,3 +194,54 @@ def mean_ci(rates):
         return mean, None, None
     std = statistics.stdev(rates)
     return mean, std, t975(len(rates) - 1) * std / math.sqrt(len(rates))
+
+
+def _betacf(a: float, b: float, x: float) -> float:
+    tiny = 1e-300
+    c, d = 1.0, 1.0 - (a + b) * x / (a + 1.0)
+    d = 1.0 / (d if abs(d) > tiny else tiny)
+    h = d
+    for m in range(1, 300):
+        for num in (m * (b - m) * x / ((a + 2 * m - 1) * (a + 2 * m)),
+                    -(a + m) * (a + b + m) * x / ((a + 2 * m) * (a + 2 * m + 1))):
+            d = 1.0 + num * d
+            d = 1.0 / (d if abs(d) > tiny else tiny)
+            c = 1.0 + num / c
+            c = c if abs(c) > tiny else tiny
+            h *= d * c
+        if abs(d * c - 1.0) < 1e-14:
+            break
+    return h
+
+
+def _betainc(a: float, b: float, x: float) -> float:
+    if x <= 0.0:
+        return 0.0
+    if x >= 1.0:
+        return 1.0
+    front = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
+                     + a * math.log(x) + b * math.log(1.0 - x))
+    if x < (a + 1.0) / (a + b + 2.0):
+        return front * _betacf(a, b, x) / a
+    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
+
+
+def t_pvalue(t: float, df: int) -> float:
+    if math.isinf(t):
+        return 0.0
+    return _betainc(df / 2.0, 0.5, df / (df + t * t))
+
+
+def paired_t(base, marked):
+    diffs = [round(m - b, 12) for b, m in zip(base, marked)]
+    n = len(diffs)
+    if n < 2:
+        return None
+    dbar = sum(diffs) / n
+    se = statistics.stdev(diffs) / math.sqrt(n)
+    if se == 0:
+        if dbar == 0:
+            return {"dbar": 0.0, "t": None, "df": n - 1, "p": None}
+        return {"dbar": dbar, "t": math.copysign(math.inf, dbar), "df": n - 1, "p": 0.0}
+    t = dbar / se
+    return {"dbar": dbar, "t": t, "df": n - 1, "p": t_pvalue(t, n - 1)}
