@@ -28,8 +28,8 @@ What it does:
     the same panel again as one PNG per model.
   - separate categories (injection_set.SEPARATE_CATEGORIES, e.g. dovsdofs): left out of
     every chart above and of --compare, and drawn on their own instead -- a group per
-    pair (DOVSDOFS_01), a bar per model per variant, hue = model, solid = the nomarker
-    baseline, hatched = the marked variant (SYSTEM:).
+    model on the x-axis, two bars side by side: orange = the nomarker baseline, blue =
+    the marked variant (SYSTEM:). A second pair (DOVSDOFS_02) adds a group per model.
 
 How to run it:
   python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
@@ -461,9 +461,9 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
     for title, image, csv_path in separate:
         block += [f"### {title} (separate, not in the ASR)", "",
                   f"![{title}]({rel(image)})", "",
-                  f"Kept out of every chart above. A group per pair; hue is the model, a "
-                  f"solid bar the `{injection_set.BASE_VARIANT}` variant and a hatched bar "
-                  f"the marked one. The counts are in [`{rel(csv_path)}`]({rel(csv_path)}).",
+                  f"Kept out of every chart above. A group per model, two bars side by "
+                  f"side: orange the `{injection_set.BASE_VARIANT}` variant, blue the marked "
+                  f"one. The counts are in [`{rel(csv_path)}`]({rel(csv_path)}).",
                   ""]
     if reasoning:
         image, csv_path, reasoning_per_category = reasoning
@@ -477,51 +477,53 @@ def embed_in_report(report_path: Path, overview: Path, twin: Path, per_category,
     return True
 
 
-def separate_chart(category: str, rows, models, slot_of, analysis_dir: Path, out_dir: Path):
+def separate_chart(category: str, rows, models, analysis_dir: Path, out_dir: Path):
     for r in rows:
         r["pair"], _, r["variant"] = r["injection"].rpartition("_")
+        r["pair_model"] = (r["pair"], r["model"])
     rows = [r for r in rows if r["model"] in models]
-    series_of = lambda r: (r["model"], r["variant"])
-    cells, _ = aggregate(rows, "pair", series_of=series_of)
+    series_of = lambda r: r["variant"]
+    cells, _ = aggregate(rows, "pair_model", series_of=series_of)
     if not cells:
         return None
-    stats = seed_stats(rows, "pair", series_of=series_of)
+    stats = seed_stats(rows, "pair_model", series_of=series_of)
 
-    variants = sorted({v for (_, v), _ in cells},
+    variants = sorted({v for v, _ in cells},
                       key=lambda v: (v != injection_set.BASE_VARIANT, v))
-    if len(variants) > len(LANE_HATCH):
+    hues = [SERIES[1], SERIES[0], *SERIES[2:]]
+    if len(variants) > len(hues):
         sys.exit(f"ERROR: {category} has {len(variants)} variants per pair but only "
-                 f"{len(LANE_HATCH)} hatch patterns.")
-    hatch_of = {v: LANE_HATCH[i] for i, v in enumerate(variants)}
-    present = [m for m in models if any(series[0] == m for series, _ in cells)]
-    series = [(m, v) for m in present for v in variants]
-    pairs = sorted({pair for _, pair in cells})
+                 f"{len(hues)} colours.")
+    hue_of = {v: hues[i] for i, v in enumerate(variants)}
+    pairs = sorted({pair for _, (pair, _) in cells})
+    present = [m for m in models if any(model == m for _, (_, model) in cells)]
+    groups = [(p, m) for p in pairs for m in present if any((v, (p, m)) in cells
+                                                              for v in variants)]
 
     twin = analysis_dir / f"{category}.csv"
     write_csv([{"model": m, "pair": p, "variant": v, "injection": f"{p}_{v}",
-                "seen": sum(cells[((m, v), p)].values()),
-                **{b: cells[((m, v), p)][b] for b in BUCKETS},
-                **rate_fields(stats, ((m, v), p))}
-               for m, v in series for p in pairs if ((m, v), p) in cells],
+                "seen": sum(cells[(v, (p, m))].values()),
+                **{b: cells[(v, (p, m))][b] for b in BUCKETS},
+                **rate_fields(stats, (v, (p, m)))}
+               for p, m in groups for v in variants if (v, (p, m)) in cells],
               twin, ["model", "pair", "variant", "injection", "seen", *BUCKETS, "seeds",
                      "trick_rate", "trick_rate_std", "trick_rate_ci95"])
 
     title = injection_set.SEPARATE_CATEGORIES[category]
-    image = render(stats, series, pairs, title, out_dir / f"{category}.png", injection_label,
-                   style_fn=lambda k, _slot: hatch_style(SERIES[slot_of[k[0]]],
-                                                         hatch_of[k[1]]),
-                   series_label=lambda k: f"{k[0]} - {k[1]}", legend_ncol=len(present))
+    label = (lambda g: g[1]) if len(pairs) == 1 else (lambda g: f"{g[1]}\n{g[0]}")
+    image = render(stats, variants, groups, title, out_dir / f"{category}.png", label,
+                   style_fn=lambda v, _slot: {"color": hue_of[v]},
+                   legend_ncol=len(variants))
 
     print(f"{category} (separate, not in the ASR) -- delta is vs "
           f"'{injection_set.BASE_VARIANT}':")
-    for m in present:
-        for p in pairs:
-            rates = [(v, stats[((m, v), p)][0]) for v in variants if ((m, v), p) in stats]
-            base = dict(rates).get(injection_set.BASE_VARIANT)
-            parts = [f"{v} {rate:.0%}" + ("" if base is None or v == injection_set.BASE_VARIANT
-                                          else f" ({rate - base:+.0%})")
-                     for v, rate in rates]
-            print(f"  {m:24} {p:14} " + "   ".join(parts))
+    for p, m in groups:
+        rates = [(v, stats[(v, (p, m))][0]) for v in variants if (v, (p, m)) in stats]
+        base = dict(rates).get(injection_set.BASE_VARIANT)
+        parts = [f"{v} {rate:.0%}" + ("" if base is None or v == injection_set.BASE_VARIANT
+                                      else f" ({rate - base:+.0%})")
+                 for v, rate in rates]
+        print(f"  {m:24} {p:14} " + "   ".join(parts))
     return title, image, twin
 
 
@@ -717,7 +719,7 @@ def main() -> None:
 
     separate = []
     for category in sorted(separate_rows):
-        drawn = separate_chart(category, separate_rows[category], models, slot_of,
+        drawn = separate_chart(category, separate_rows[category], models,
                                analysis_dir, out_dir)
         if drawn:
             separate.append(drawn)
