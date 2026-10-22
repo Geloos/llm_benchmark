@@ -11,18 +11,20 @@ What it does:
   and its free text (Apache UA, sshd, mysql) alike -- so the hex lane holds no readable copy
   of the injection anywhere. A VG_ row rotates its guesses clockwise through the
   markers (marker k gets variant k mod n), so every guess lands in every file.
-  A full run (no --only-id) also deletes the .txt files in each output folder that no
-  longer match an injection id, so a dropped injection is not benchmarked from a
-  leftover file.
+  An output file that already exists and is newer than its source log, the injections
+  jsonl, this script and injection_set.py is skipped, so a re-run only writes what is
+  missing or stale; delete a file to force it. Every run also deletes the .txt files in
+  each output folder that no longer match an injection id, so a dropped injection is not
+  benchmarked from a leftover file.
 
 How to run it:
-  python3 inject_prompts.py --attack-dir attack_logs \
-      --injections jailbreaks/injections.jsonl --out-dir attack_logs_injected
+  python3 inject_prompts.py                                     # the plain lane, defaults
 
   python3 inject_prompts.py --attack-dir attack_logs_hexa \
       --out-dir attack_logs_injected_hexa                       # the hex lane
 
-  Optional: --only-id <injection id> and --only-file <basename> to narrow the run.
+  python3 inject_prompts.py --injections jailbreaks/dovsdofs.jsonl \
+      --out-dir attack_logs_injected_dovsdofs                   # the DOVSDOFS lane
 
 What it outputs:
   One sub-folder per input log, holding one .txt per injection, e.g.
@@ -135,59 +137,59 @@ def run(args):
         sys.exit('ERROR: --injections not found: %s' % args.injections)
 
     injections = injection_set.load(args.injections)
-    if args.only_id:
-        injections = [inj for inj in injections
-                      if args.only_id in [inj['id']] + inj['source_ids']]
-        if not injections:
-            sys.exit('ERROR: no injection with id %s in %s' % (args.only_id, args.injections))
-
     files = [f for f in sorted(os.listdir(args.attack_dir))
              if os.path.isfile(os.path.join(args.attack_dir, f))]
-    if args.only_file:
-        files = [f for f in files if f == args.only_file]
-        if not files:
-            sys.exit('ERROR: %s not in %s' % (args.only_file, args.attack_dir))
     if not files:
         sys.exit('ERROR: no input files under %s' % args.attack_dir)
 
+    stamp = max(os.path.getmtime(p) for p in
+                (args.injections, os.path.abspath(__file__),
+                 os.path.abspath(injection_set.__file__)))
     os.makedirs(args.out_dir, exist_ok=True)
-    grand = 0
+    written = fresh = removed = 0
     for fname in files:
         in_path = os.path.join(args.attack_dir, fname)
-        with open(in_path, encoding='utf-8', errors='replace') as fh:
-            text = fh.read()
+        newer_than = max(stamp, os.path.getmtime(in_path))
         sub_dir = os.path.join(args.out_dir, out_subdir(in_path))
         os.makedirs(sub_dir, exist_ok=True)
-        print(fname)
+        text = None
         for inj in injections:
-            injected, count, hex_count = inject_text(text, inj)
             out_path = os.path.join(sub_dir, out_name(in_path, inj['id']))
+            if os.path.isfile(out_path) and os.path.getmtime(out_path) >= newer_than:
+                fresh += 1
+                continue
+            if text is None:
+                print(fname)
+                with open(in_path, encoding='utf-8', errors='replace') as fh:
+                    text = fh.read()
+            injected, count, hex_count = inject_text(text, inj)
             with open(out_path, 'w', encoding='utf-8', newline='\n') as out:
                 out.write(injected)
             print('  %-28s %3d markers (%d text / %d hex)  -> %s'
                   % (inj['id'], count, count - hex_count, hex_count, out_path))
-            grand += 1
-        if not args.only_id:
-            current = {out_name(in_path, inj['id']) for inj in injections}
-            for stale in sorted(os.listdir(sub_dir)):
-                if stale.endswith('.txt') and stale not in current:
-                    os.remove(os.path.join(sub_dir, stale))
-                    print('  %-28s removed (no longer in %s)' % (stale, args.injections))
-    print('done: %d injected files under %s/' % (grand, args.out_dir))
+            written += 1
+        current = {out_name(in_path, inj['id']) for inj in injections}
+        for stale in sorted(os.listdir(sub_dir)):
+            if stale.endswith('.txt') and stale not in current:
+                os.remove(os.path.join(sub_dir, stale))
+                print('  %s removed (no longer in %s)'
+                      % (os.path.join(sub_dir, stale), args.injections))
+                removed += 1
+    print('done: %s/ -- %d written, %d already up to date, %d removed'
+          % (args.out_dir, written, fresh, removed))
 
 
 def main():
     ap = argparse.ArgumentParser(
         description='Replace the this_is_the_injection marker in extracted attack logs '
-                    'with prompt-injection payloads from injections.jsonl.')
+                    'with prompt-injection payloads from injections.jsonl. Files already '
+                    'up to date are skipped.')
     ap.add_argument('--attack-dir', default='attack_logs',
                     help='folder of extracted attack logs (default: attack_logs)')
     ap.add_argument('--injections', default='jailbreaks/injections.jsonl',
                     help='injections jsonl (default: jailbreaks/injections.jsonl)')
     ap.add_argument('--out-dir', default='attack_logs_injected',
                     help='output folder (default: attack_logs_injected)')
-    ap.add_argument('--only-id', help='only this injection id (default: all)')
-    ap.add_argument('--only-file', help='only this input basename (default: all)')
     run(ap.parse_args())
 
 

@@ -323,7 +323,7 @@ def keep_truncated(dest: Path, log_file: Path, reply: Path, meta: Path) -> Path:
     return dest
 
 
-def parse_args():
+def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="MIRANDA injection benchmark (light).")
     ap.add_argument("--input-root", default="attack_logs_injected",
                     help="folder holding the per-attack injected-log folders")
@@ -361,11 +361,10 @@ def parse_args():
                     help=f"context window requested from ollama (default {NUM_CTX}); "
                          "lower it for models trained on a smaller window, e.g. "
                          "--models qwen2.5:14b-instruct --num-ctx 32768")
-    return ap.parse_args()
+    return ap.parse_args(argv)
 
 
-def main() -> None:
-    args = parse_args()
+def plan(args) -> dict:
     input_root = Path(args.input_root)
     if args.models is None:
         args.models = experiment.models_for(args.temperature)
@@ -382,11 +381,29 @@ def main() -> None:
         p for p in input_root.iterdir()
         if p.is_dir() and wanted_folder(p.name, args.logs, args.exclude_logs)
     )
-    txt_by_folder = {
+    return {
         f: sorted(t for t in f.glob("*.txt")
                   if wanted_file(t.stem, args.injections, args.exclude_injections))
         for f in folders
     }
+
+
+def pending(args, txt_by_folder: dict) -> int:
+    missing = 0
+    for seed in args.seeds:
+        results_root = experiment.seed_dir(args.results_root, args.temperature, seed)
+        for model in args.models:
+            model_dir = results_root / experiment.sanitize(model)
+            for folder, txt_files in txt_by_folder.items():
+                out_dir = model_dir / f"results_{folder.name}"
+                missing += sum(not (out_dir / f"{t.stem}.txt").exists() for t in txt_files)
+    return missing
+
+
+def main() -> None:
+    args = parse_args()
+    txt_by_folder = plan(args)
+    folders = list(txt_by_folder)
     total = sum(len(v) for v in txt_by_folder.values()) * len(args.models) * len(args.seeds)
     progress = {"done": 0, "total": total}
 

@@ -8,7 +8,8 @@ injection succeeded. See `CLAUDE.md` for how the pipeline works.
 
 ```bash
 pip install -r requirements.txt
-python main.py --corpus both                  # inject, benchmark, summarize, chart, 5 runs each: plain at low + medium, hexa at low
+python main.py                                # plain (low + medium), hexa (low), dovsdofs (low), 5 runs each; done stages are skipped
+python main.py --help                         # pick lanes (--plain --hexa --dovsdofs), levels (--low --medium), filters
 ```
 
 ## Reading the results

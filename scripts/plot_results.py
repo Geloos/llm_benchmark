@@ -23,7 +23,7 @@ What it does:
   - reasoning: the overview and per-category charts again, for the gpt-oss @low /
     @medium / @high series only, in that order. Drawn only when more than one level is
     present, i.e. at temp_medium (the reasoning experiment), like reasoning_report.md.
-  - top injections: one PNG with a panel per model, each that model's --top strongest
+  - top injections: one PNG with a panel per model, each that model's TOP_N (5) strongest
     injections ranked by trick rate (ties broken by the smaller std, then the id), and
     the same panel again as one PNG per model.
 
@@ -35,11 +35,7 @@ What it does:
   (DOVSDOFS_02) adds a group per model.
 
 How to run it:
-  python3 plot_results.py --analysis-dir analysis/temp_low   # one temperature's analysis
-  python3 plot_results.py --no-per-category        # overview chart only
-  python3 plot_results.py --no-report-embed        # leave analysis/report.md alone
-  python3 plot_results.py --top 10                 # 10 injections per panel (default 5)
-  python3 plot_results.py --no-reasoning --no-top  # skip the two extra views
+  python3 plot_results.py --analysis-dir analysis/temp_low   # every chart, into charts/
   python3 plot_results.py --analysis-dir analysis --compare analysis_hexa
   python3 plot_results.py --analysis-dir analysis_dovsdofs/temp_low --paired
 
@@ -95,6 +91,7 @@ REASONING_TITLE = "gpt-oss reasoning effort, by category"
 TOP_STEM = "top_injections"
 TOP_TITLE = "Strongest injections per model"
 TOP_MODEL_TITLE = "Strongest injections"
+TOP_N = 5
 REASONING_HUE = {"high": SERIES[0]}
 LANE_HATCH = (None, "///", "...", "xxx")
 SENTINEL = "<!-- charts:begin -->"
@@ -198,7 +195,7 @@ def read_lanes(pairs):
         path = Path(analysis_dir) / "verdicts.csv"
         if not path.is_file():
             sys.exit(f"ERROR: {path} not found -- run that lane first:\n"
-                     f"  python main.py --corpus {lane}")
+                     f"  python main.py --{lane}")
         for r in read_verdicts(path):
             r["lane"] = lane
             rows.append(r)
@@ -561,11 +558,11 @@ def paired_chart(category: str, rows, models, analysis_dir: Path, out_dir: Path)
     return image, twin
 
 
-def run_paired(analysis_dir: Path, out_dir: Path, args) -> None:
+def run_paired(analysis_dir: Path, out_dir: Path) -> None:
     verdicts = analysis_dir / "verdicts.csv"
     if not verdicts.is_file():
         sys.exit(f"ERROR: {verdicts} not found -- run the analysis step first:\n"
-                 f"  python main.py --dovsdofs --skip-inject --skip-benchmark")
+                 f"  python main.py --dovsdofs   (stages already done are skipped)")
     by_category = defaultdict(list)
     for r in read_verdicts(verdicts):
         by_category[r.get("category", "")].append(r)
@@ -579,7 +576,7 @@ def run_paired(analysis_dir: Path, out_dir: Path, args) -> None:
             drawn.append(result)
     if not drawn:
         sys.exit(f"ERROR: no usable rows in {verdicts}")
-    if not args.no_report_embed and embed_paired(analysis_dir / "report.md", *drawn[0]):
+    if embed_paired(analysis_dir / "report.md", *drawn[0]):
         print(f"embedded the chart in {analysis_dir / 'report.md'}")
     for image, twin in drawn:
         print(f"wrote {image} and {twin}")
@@ -655,18 +652,6 @@ def parse_args():
     ap = argparse.ArgumentParser(description="Chart jailbreak effectiveness per model.")
     ap.add_argument("--analysis-dir", default="analysis",
                     help="where verdicts.csv and report.md live (default: analysis)")
-    ap.add_argument("--out-dir", default=None,
-                    help="where to write the PNGs (default: <analysis-dir>/charts)")
-    ap.add_argument("--no-per-category", action="store_true",
-                    help="only draw the overview, skip the per-category charts")
-    ap.add_argument("--no-report-embed", action="store_true",
-                    help="do not touch report.md")
-    ap.add_argument("--no-reasoning", action="store_true",
-                    help="skip the gpt-oss reasoning-level charts")
-    ap.add_argument("--no-top", action="store_true",
-                    help="skip the top-injections-per-model charts")
-    ap.add_argument("--top", type=int, default=5, metavar="N",
-                    help="injections per model in the top-injections charts (default: 5)")
     ap.add_argument("--compare", nargs="+", metavar="OTHER_ANALYSIS_DIR",
                     help="draw ONLY the cross-lane comparison chart, reading these dirs' "
                          "verdicts.csv alongside --analysis-dir's (e.g. --compare "
@@ -692,19 +677,19 @@ def main() -> None:
                  "  pip install matplotlib      (or: pip install -r requirements.txt)")
 
     analysis_dir = Path(args.analysis_dir)
-    out_dir = Path(args.out_dir) if args.out_dir else analysis_dir / "charts"
+    out_dir = analysis_dir / "charts"
 
     if args.compare:
         run_compare(args, analysis_dir, out_dir)
         return
     if args.paired:
-        run_paired(analysis_dir, out_dir, args)
+        run_paired(analysis_dir, out_dir)
         return
 
     verdicts = analysis_dir / "verdicts.csv"
     if not verdicts.is_file():
         sys.exit(f"ERROR: {verdicts} not found -- run the analysis step first:\n"
-                 f"  python main.py --skip-inject --skip-benchmark")
+                 f"  python main.py   (stages already done are skipped)")
 
     rows = read_verdicts(verdicts)
     by_category, unknown = aggregate(rows, "category")
@@ -749,41 +734,38 @@ def main() -> None:
     members = group_by_category(rows)
 
     per_category = []
-    if not args.no_per_category:
-        inj_cells = {k: v for k, v in by_injection.items() if k[0] in models}
-        sub_dir = out_dir / "by_category"
-        sub_dir.mkdir(parents=True, exist_ok=True)
-        for category in categories:
-            injections = pooled_order(inj_cells, members[category])
-            if not injections:
-                continue
-            image = render(injection_stats, models, injections,
-                           category.replace("_", " "), sub_dir / f"{category}.png",
-                           injection_label, style_fn=hue)
-            per_category.append((category, image))
-            written.append(image)
-
-    top = None
-    if not args.no_top and args.top > 0:
-        panels = sorted(models, key=lambda m: (m.partition("@")[0], level_rank(m)))
-        ranked = top_injections(injection_stats, panels, args.top)
-        category_of = {inj: cat for cat, injs in members.items() for inj in injs}
-        top_csv = analysis_dir / f"{TOP_STEM}.csv"
-        write_csv(top_rows(ranked, injection_stats, category_of), top_csv,
-                  ["model", "rank", "injection", "category", "seeds", "trick_rate",
-                   "trick_rate_std", "trick_rate_ci95"])
-        image = render_top(injection_stats, ranked, slot_of, TOP_TITLE,
-                           out_dir / f"{TOP_STEM}.png")
+    inj_cells = {k: v for k, v in by_injection.items() if k[0] in models}
+    sub_dir = out_dir / "by_category"
+    sub_dir.mkdir(parents=True, exist_ok=True)
+    for category in categories:
+        injections = pooled_order(inj_cells, members[category])
+        if not injections:
+            continue
+        image = render(injection_stats, models, injections,
+                       category.replace("_", " "), sub_dir / f"{category}.png",
+                       injection_label, style_fn=hue)
+        per_category.append((category, image))
         written.append(image)
-        model_dir = out_dir / TOP_STEM
-        model_dir.mkdir(parents=True, exist_ok=True)
-        for model in panels:
-            written.append(render_top(injection_stats, {model: ranked[model]}, slot_of,
-                                      TOP_MODEL_TITLE, model_dir / f"{model}.png"))
-        top = (image, top_csv, model_dir)
+
+    panels = sorted(models, key=lambda m: (m.partition("@")[0], level_rank(m)))
+    ranked = top_injections(injection_stats, panels, TOP_N)
+    category_of = {inj: cat for cat, injs in members.items() for inj in injs}
+    top_csv = analysis_dir / f"{TOP_STEM}.csv"
+    write_csv(top_rows(ranked, injection_stats, category_of), top_csv,
+              ["model", "rank", "injection", "category", "seeds", "trick_rate",
+               "trick_rate_std", "trick_rate_ci95"])
+    image = render_top(injection_stats, ranked, slot_of, TOP_TITLE,
+                       out_dir / f"{TOP_STEM}.png")
+    written.append(image)
+    model_dir = out_dir / TOP_STEM
+    model_dir.mkdir(parents=True, exist_ok=True)
+    for model in panels:
+        written.append(render_top(injection_stats, {model: ranked[model]}, slot_of,
+                                  TOP_MODEL_TITLE, model_dir / f"{model}.png"))
+    top = (image, top_csv, model_dir)
 
     reasoning = None
-    if not args.no_reasoning and len(levels) > 1:
+    if len(levels) > 1:
         r_dir = out_dir / "reasoning"
         r_dir.mkdir(parents=True, exist_ok=True)
         r_csv = analysis_dir / f"{REASONING_STEM}.csv"
@@ -796,20 +778,19 @@ def main() -> None:
                             r_dir / f"{CHART_STEM}.png", category_label, style_fn=r_hue)
         written.append(r_overview)
         r_per_category = []
-        if not args.no_per_category:
-            r_inj_cells = {k: v for k, v in by_injection.items() if k[0] in levels}
-            sub_dir = r_dir / "by_category"
-            sub_dir.mkdir(parents=True, exist_ok=True)
-            for category in r_categories:
-                injections = pooled_order(r_inj_cells, members[category])
-                if not injections:
-                    continue
-                image = render(injection_stats, levels, injections,
-                               f"gpt-oss reasoning effort: {category.replace('_', ' ')}",
-                               sub_dir / f"{category}.png", injection_label,
-                               style_fn=r_hue)
-                r_per_category.append((category, image))
-                written.append(image)
+        r_inj_cells = {k: v for k, v in by_injection.items() if k[0] in levels}
+        sub_dir = r_dir / "by_category"
+        sub_dir.mkdir(parents=True, exist_ok=True)
+        for category in r_categories:
+            injections = pooled_order(r_inj_cells, members[category])
+            if not injections:
+                continue
+            image = render(injection_stats, levels, injections,
+                           f"gpt-oss reasoning effort: {category.replace('_', ' ')}",
+                           sub_dir / f"{category}.png", injection_label,
+                           style_fn=r_hue)
+            r_per_category.append((category, image))
+            written.append(image)
         reasoning = (r_overview, r_csv, r_per_category)
 
     if unknown:
@@ -821,9 +802,8 @@ def main() -> None:
         best = max(rates, key=lambda kv: kv[1]) if rates else ("-", 0.0)
         print(f"{model:24} weakest against: {best[0]:26} trick rate {best[1]:.0%}")
 
-    if not args.no_report_embed and embed_in_report(
-            analysis_dir / "report.md", overview, twin, per_category,
-            reasoning=reasoning, top=top):
+    if embed_in_report(analysis_dir / "report.md", overview, twin, per_category,
+                       reasoning=reasoning, top=top):
         print(f"embedded the charts in {analysis_dir / 'report.md'}")
     print(f"wrote {twin} and {len(written)} chart(s) under {out_dir}")
 

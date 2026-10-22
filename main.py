@@ -5,30 +5,57 @@ main.py
 What it does:
   Runs the whole pipeline for one or more lanes: inject -> context preflight, then per
   temperature: benchmark the injected logs -> summarize -> charts, then a cross-lane
-  comparison chart per temperature.
+  comparison chart per temperature. Every stage skips itself when its output is already
+  on disk and up to date, so a re-run only does what is missing. To force a stage, delete
+  its output (e.g. rm -r analysis_hexa/temp_low/charts).
 
 How to run it:
-  python main.py                     # the plain corpus (attack_logs/)
-  python main.py --corpus hexa       # the hex corpus (attack_logs_hexa/)
-  python main.py --corpus both       # plain + hexa, then the comparison chart
-  python main.py --temperatures low  # only level low (default: low medium)
-  python main.py --dovsdofs          # ONLY the DOVSDOFS lane
-  python main.py --skip-dovsdofs     # everything but the DOVSDOFS lane
+  python main.py                                   # everything: plain, hexa, dovsdofs
+  python main.py --hexa                            # only the hex lane
+  python main.py --plain --dovsdofs                # experiment flags combine
+  python main.py --plain --low                     # only temp_low
+  python main.py --plain --medium --skip-reasoning # medium without gpt-oss @medium/@high
+  python main.py --skip-check                      # no context preflight
 
-  The DOVSDOFS lane is a separate experiment -- one direct override without vs with a
-  SYSTEM: marker (jailbreaks/dovsdofs.jsonl) -- with its own folders:
-  attack_logs/ -> attack_logs_injected_dovsdofs/ -> results_dovsdofs/ -> analysis_dovsdofs/.
-  It runs at level low only, with gpt-oss@medium, llama3.1 and gemma3
-  (experiment.DOVSDOFS_MODELS), 5 seeds, and its analysis adds a paired t-test per model
-  (--paired). It runs after the --corpus lane(s) unless --skip-dovsdofs.
+  Narrow the benchmark (the preflight gets --models and --logs too):
+  python main.py --plain --low --models llama3.1:8b --categories direct_override --logs drupal
+  python main.py --hexa --injections DO_01_canonical PH_
+  python main.py --dovsdofs --runs 10
 
-  The hexa lane runs level low only (LANE_TEMPERATURES), so the cross-lane chart is
-  drawn at temp_low alone and --corpus hexa --temperatures medium runs nothing.
+  What to run (none given = all of them):
+    --plain --hexa --dovsdofs   the experiments. dovsdofs is one direct override without
+                                vs with a SYSTEM: marker (jailbreaks/dovsdofs.jsonl), at
+                                level low with gpt-oss@medium, llama3.1, gemma3
+                                (experiment.DOVSDOFS_MODELS); its analysis adds a paired
+                                t-test per model (--paired).
+    --low --medium              the temperature levels. hexa and dovsdofs run low only
+                                (LANE_TEMPERATURES), so the cross-lane chart is drawn at
+                                temp_low alone.
+    --skip-reasoning            at medium, run only gpt-oss@low + llama3.1 + gemma3 (no
+                                reasoning experiment). dovsdofs is not affected.
+    --skip-check                no context preflight.
 
-  Stages are skipped with --skip-inject / --skip-check / --skip-benchmark /
-  --skip-summary / --skip-charts / --skip-compare, and they compose. Any extra
-  args are forwarded to run_benchmark.py:
-      python main.py --models llama3.1:8b --injections DO_ PH_
+  Narrow the benchmark:
+    --runs N                    repeats, seeds 42..42+N-1 (default 5)
+    --models M ...              replace the lane's model list (gpt-oss:20b@high, ...)
+    --categories C ...          whole injection categories (direct_override, ...)
+    --injections I ...          single ids or id prefixes (DO_01_canonical, PH_)
+    --logs L ...                log files, a full name or part of one (drupal)
+  --categories and --injections combine as a union, resolved per lane against its jsonl;
+  a lane none of them matches is skipped. They narrow the benchmark calls only: inject
+  builds the full corpus and summarize / plot read everything on disk. --seeds,
+  --exclude-* and --num-ctx are on scripts/run_benchmark.py for running it by hand.
+
+  A stage is skipped when:
+    1  inject      always runs, and skips each file itself that is newer than its source
+                   log, the jsonl and the injector's code
+    1b preflight   --skip-check, or no benchmark call is pending at any level of the lane
+    2  benchmark   no result file is missing for that level and those filters
+    3  summarize   verdicts.csv + report.md exist and verdicts.csv is newer than every
+                   result *.txt / *.meta.json under results*/temp_<t>/ and the jsonl
+    4  charts      the overview PNG (dovsdofs.png for the paired lane) is newer than
+                   verdicts.csv
+    5  compare     plain_vs_hexa.png is newer than both lanes' verdicts.csv
 
 What it outputs:
   Per lane: attack_logs_injected*/, then one temp_<t>/ folder per temperature under
@@ -47,16 +74,12 @@ What it outputs:
     temperature  every level x gpt-oss@low, llama3.1, gemma3;
     reasoning    medium x gpt-oss@low / @medium / @high. medium x gpt-oss@low is the
                  temperature experiment's run too, so only @medium and @high are extra.
-  Narrow the
-  seeds with a forwarded --seeds, or change the count with --runs:
-      python main.py --temperatures medium --seeds 42 43 44
-      python main.py --temperatures medium --runs 10
-
 """
 
 from __future__ import annotations
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -64,23 +87,29 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 SCRIPTS = ROOT / "scripts"
 sys.path.insert(0, str(SCRIPTS))
-import experiment  
+import experiment
+import injection_set
+import run_benchmark as bench
 
 INJECT = SCRIPTS / "inject_prompts.py"
 CHECK = SCRIPTS / "check_context.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
 SUMMARIZE = SCRIPTS / "summarize_results.py"
 CHARTS = SCRIPTS / "plot_results.py"
+CHARTS_STEM = "trick_rate_by_category"
 
+DEFAULT_INJECTIONS = "jailbreaks/injections.jsonl"
 CORPORA = {
     "plain": {"attack_dir": "attack_logs",
               "injected": "attack_logs_injected",
               "results": "results",
-              "analysis": "analysis"},
+              "analysis": "analysis",
+              "injections": DEFAULT_INJECTIONS},
     "hexa": {"attack_dir": "attack_logs_hexa",
              "injected": "attack_logs_injected_hexa",
              "results": "results_hexa",
-             "analysis": "analysis_hexa"},
+             "analysis": "analysis_hexa",
+             "injections": DEFAULT_INJECTIONS},
     "dovsdofs": {"attack_dir": "attack_logs",
                  "injected": "attack_logs_injected_dovsdofs",
                  "results": "results_dovsdofs",
@@ -89,23 +118,14 @@ CORPORA = {
                  "models": experiment.DOVSDOFS_MODELS,
                  "paired": True},
 }
-DEFAULT_INJECTIONS = "jailbreaks/injections.jsonl"
-
-LANE_SETS = {
-    "plain": ("plain",),
-    "hexa": ("hexa",),
-    "both": ("plain", "hexa"),
-}
+LANES = ("plain", "hexa", "dovsdofs")
+COMPARE_LANES = ("plain", "hexa")
 
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
     "hexa": ("low",),
     "dovsdofs": ("low",),
 }
-
-
-def lane_temperatures(lane: str, args) -> list[str]:
-    return [t for t in args.temperatures if t in LANE_TEMPERATURES[lane]]
 
 
 def run_step(name: str, script: Path, extra_args: list[str]) -> int:
@@ -115,128 +135,197 @@ def run_step(name: str, script: Path, extra_args: list[str]) -> int:
     return subprocess.run(cmd, cwd=ROOT).returncode
 
 
-def forward_flags(extra_args: list[str], keep: set[str]) -> list[str]:
-    out, taking = [], False
-    for token in extra_args:
-        if token.startswith("--"):
-            taking = token.split("=", 1)[0] in keep
-        if taking:
-            out.append(token)
-    return out
+def skipped(name: str, why: str) -> None:
+    print(f"\n=== {name} -> skipped ({why}) ===")
 
 
-def run_lane(lane: str, args, benchmark_args: list[str], labelled: bool) -> int:
+def mtime(path) -> float:
+    try:
+        return Path(path).stat().st_mtime
+    except OSError:
+        return 0.0
+
+
+def newest(root, patterns) -> float:
+    return max((mtime(p) for pattern in patterns for p in Path(root).rglob(pattern)),
+               default=0.0)
+
+
+def all_categories() -> list[str]:
+    found = set()
+    for paths in CORPORA.values():
+        found |= {inj.get("category") or "unknown"
+                  for inj in injection_set.load(paths["injections"])}
+    return sorted(found)
+
+
+def lane_injections(lane: str, args):
+    if not args.categories and not args.injections:
+        return None
+    picked = []
+    for inj in injection_set.load(CORPORA[lane]["injections"]):
+        names = [inj["id"]] + inj["source_ids"]
+        if (inj.get("category") in (args.categories or [])
+                or any(n.startswith(p) for n in names for p in (args.injections or []))):
+            picked.append(inj["id"])
+    return picked
+
+
+def lane_models(lane: str, temp: str, args) -> list[str]:
     paths = CORPORA[lane]
-    tag = f"[{lane}] " if labelled else ""
-    if "models" in paths:
-        benchmark_args = ["--models", *paths["models"]] + benchmark_args
+    models = list(args.models or paths.get("models") or experiment.models_for(temp))
+    if args.skip_reasoning and "models" not in paths:
+        models = [m for m in models if experiment.reasoning_level(m)
+                  in (None, experiment.TEMPERATURE_EXPERIMENT_THINK)]
+    return models
 
-    temps = lane_temperatures(lane, args)
+
+def benchmark_work(lane: str, temp: str, args, ids):
+    paths = CORPORA[lane]
+    argv = ["--input-root", paths["injected"], "--results-root", paths["results"],
+            "--temperature", temp, "--models", *lane_models(lane, temp, args)]
+    if ids is not None:
+        argv += ["--injections", *ids]
+    if args.logs:
+        argv += ["--logs", *args.logs]
+    if args.runs:
+        argv += ["--runs", str(args.runs)]
+    planned = bench.parse_args(argv)
+    txt_by_folder = bench.plan(planned)
+    total = (sum(len(v) for v in txt_by_folder.values())
+             * len(planned.models) * len(planned.seeds))
+    return {"argv": argv, "models": planned.models, "total": total,
+            "pending": bench.pending(planned, txt_by_folder) if total else 0}
+
+
+def run_lane(lane: str, args, temperatures: list[str]) -> int:
+    paths = CORPORA[lane]
+    tag = f"[{lane}] "
+
+    temps = [t for t in temperatures if t in LANE_TEMPERATURES[lane]]
     if not temps:
         print(f"\n=== {tag}lane skipped: it runs at {', '.join(LANE_TEMPERATURES[lane])} "
-              f"only, and --temperatures asked for {', '.join(args.temperatures)} ===")
+              f"only, and you asked for {', '.join(temperatures)} ===")
         return 0
 
-    if not args.skip_inject:
-        rc = run_step(f"{tag}STEP 1  inject prompts", INJECT,
-                      ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"],
-                       "--injections", paths.get("injections", DEFAULT_INJECTIONS)])
-        if rc != 0:
-            print(f"\ninject step failed (exit {rc}); not running the benchmark.")
-            return rc
-    else:
-        print(f"\n=== {tag}STEP 1  inject prompts -> skipped ===")
+    ids = lane_injections(lane, args)
+    if ids == []:
+        print(f"\n=== {tag}lane skipped: no injection in {paths['injections']} matches "
+              f"--categories / --injections ===")
+        return 0
 
-    if not args.skip_benchmark and not args.skip_check:
+    rc = run_step(f"{tag}STEP 1  inject prompts", INJECT,
+                  ["--attack-dir", paths["attack_dir"], "--out-dir", paths["injected"],
+                   "--injections", paths["injections"]])
+    if rc != 0:
+        print(f"\ninject step failed (exit {rc}); not running the benchmark.")
+        return rc
+
+    work = {temp: benchmark_work(lane, temp, args, ids) for temp in temps}
+
+    if args.skip_check:
+        skipped(f"{tag}STEP 1b context preflight", "--skip-check")
+    elif not any(w["pending"] for w in work.values()):
+        skipped(f"{tag}STEP 1b context preflight", "no benchmark call pending")
+    else:
+        models = []
+        for w in work.values():
+            if w["pending"]:
+                models += [m for m in w["models"] if m not in models]
         rc = run_step(f"{tag}STEP 1b context preflight", CHECK,
                       ["--input-root", paths["injected"],
-                       "--out", f"{paths['analysis']}/context_check.csv"]
-                      + forward_flags(benchmark_args, {"--models", "--logs", "--num-ctx"}))
+                       "--out", f"{paths['analysis']}/context_check.csv",
+                       "--models", *models]
+                      + (["--logs", *args.logs] if args.logs else []))
         if rc != 0:
             print(f"\ncontext preflight failed (exit {rc}): at least one model would be "
                   f"fed a truncated log, which makes its verdict meaningless. Fix the "
                   f"window or the model list, or re-run with --skip-check to override.")
             return rc
-    else:
-        print(f"\n=== {tag}STEP 1b context preflight -> skipped ===")
 
     for temp in temps:
-        rc = run_temperature(lane, temp, args, benchmark_args, tag)
+        rc = run_temperature(lane, temp, work[temp], tag)
         if rc != 0:
             return rc
     return 0
 
 
-def run_temperature(lane: str, temp: str, args, benchmark_args: list[str], tag: str) -> int:
+def run_temperature(lane: str, temp: str, work: dict, tag: str) -> int:
     paths = CORPORA[lane]
     tag = f"{tag}[temp_{temp}] "
-    temp_args = ["--temperature", temp]
+    results = experiment.temp_dir(paths["results"], temp)
+    analysis = experiment.temp_dir(paths["analysis"], temp)
+    verdicts = analysis / "verdicts.csv"
+    paired = ["--paired"] if paths.get("paired") else []
 
-    if not args.skip_benchmark:
-        rc = run_step(f"{tag}STEP 2  run benchmark", BENCHMARK,
-                      ["--input-root", paths["injected"],
-                       "--results-root", paths["results"]] + temp_args + benchmark_args)
+    if not work["total"]:
+        skipped(f"{tag}STEP 2  run benchmark", "nothing matches the filters")
+    elif not work["pending"]:
+        skipped(f"{tag}STEP 2  run benchmark",
+                f"all {work['total']} results already there")
+    else:
+        rc = run_step(f"{tag}STEP 2  run benchmark", BENCHMARK, work["argv"])
         if rc != 0:
             print(f"\nbenchmark step failed (exit {rc}).")
             return rc
-    else:
-        print(f"\n=== {tag}STEP 2  run benchmark -> skipped ===")
 
-    if not args.skip_summary:
+    if not results.is_dir():
+        skipped(f"{tag}STEP 3  summarize results", f"no {results}/ yet")
+    elif ((analysis / "report.md").is_file()
+          and mtime(verdicts) > max(newest(results, ("*.txt", "*.meta.json")),
+                                    mtime(paths["injections"]))):
+        skipped(f"{tag}STEP 3  summarize results", f"{verdicts} is up to date")
+    else:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
                       ["--results-root", paths["results"],
                        "--out-dir", paths["analysis"], "--lane", lane,
-                       "--injections", paths.get("injections", DEFAULT_INJECTIONS)]
-                      + (["--paired"] if paths.get("paired") else []) + temp_args)
+                       "--injections", paths["injections"], "--temperature", temp] + paired)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
             return rc
-    else:
-        print(f"\n=== {tag}STEP 3  summarize results -> skipped ===")
 
-    if not args.skip_charts:
+    chart = analysis / "charts" / ("dovsdofs.png" if paired else f"{CHARTS_STEM}.png")
+    if not verdicts.is_file():
+        skipped(f"{tag}STEP 4  plot charts", f"no {verdicts}")
+    elif mtime(chart) > mtime(verdicts):
+        skipped(f"{tag}STEP 4  plot charts", f"{chart} is up to date")
+    else:
         rc = run_step(f"{tag}STEP 4  plot charts", CHARTS,
-                      ["--analysis-dir", str(experiment.temp_dir(paths["analysis"], temp))]
-                      + (["--paired"] if paths.get("paired") else []))
+                      ["--analysis-dir", str(analysis)] + paired)
         if rc != 0:
             print(f"\nchart step failed (exit {rc}).")
             return rc
-    else:
-        print(f"\n=== {tag}STEP 4  plot charts -> skipped ===")
 
     return 0
 
 
-def run_compare(args) -> int:
-    if args.skip_compare:
-        print("\n=== STEP 5  cross-lane comparison -> skipped ===")
-        return 0
+def run_compare(temperatures: list[str]) -> int:
+    for temp in temperatures:
+        name = f"[temp_{temp}] STEP 5  cross-lane comparison"
 
-    for temp in args.temperatures:
-        def analysis(lane):
-            return experiment.temp_dir(CORPORA[lane]["analysis"], temp)
-
-        absent = [lane for lane in LANE_SETS["both"] if temp not in LANE_TEMPERATURES[lane]]
+        absent = [lane for lane in COMPARE_LANES if temp not in LANE_TEMPERATURES[lane]]
         if absent:
-            print(f"\n=== [temp_{temp}] STEP 5  cross-lane comparison -> skipped "
-                  f"({' and '.join(absent)} does not run at {temp}) ===")
+            skipped(name, f"{' and '.join(absent)} does not run at {temp}")
             continue
 
-        have = [lane for lane in LANE_SETS["both"]
-                if (ROOT / analysis(lane) / "verdicts.csv").is_file()]
+        analysis = {lane: experiment.temp_dir(CORPORA[lane]["analysis"], temp)
+                    for lane in COMPARE_LANES}
+        have = [lane for lane in COMPARE_LANES if (analysis[lane] / "verdicts.csv").is_file()]
         if len(have) < 2:
-            print(f"\n=== [temp_{temp}] STEP 5  cross-lane comparison -> skipped ===")
-            missing = [lane for lane in ("plain", "hexa") if lane not in have]
-            print(f"  need two lanes with a verdicts.csv, have {len(have)} -- run "
-                  f"{' and '.join(missing)} first "
-                  f"(python main.py --corpus {missing[0]})")
+            missing = [lane for lane in COMPARE_LANES if lane not in have]
+            skipped(name, f"need both lanes with a verdicts.csv, run "
+                          f"python main.py --{missing[0]} first")
             continue
 
         baseline, others = have[0], have[1:]
-        rc = run_step(f"[temp_{temp}] STEP 5  cross-lane comparison ({' vs '.join(have)})",
-                      CHARTS,
-                      ["--analysis-dir", str(analysis(baseline)),
-                       "--compare", *[str(analysis(lane)) for lane in others],
+        chart = analysis[baseline] / "charts" / f"{'_vs_'.join(have)}.png"
+        if mtime(chart) > max(mtime(analysis[lane] / "verdicts.csv") for lane in have):
+            skipped(name, f"{chart} is up to date")
+            continue
+
+        rc = run_step(f"{name} ({' vs '.join(have)})", CHARTS,
+                      ["--analysis-dir", str(analysis[baseline]),
+                       "--compare", *[str(analysis[lane]) for lane in others],
                        "--lane-labels", *have])
         if rc != 0:
             return rc
@@ -244,53 +333,63 @@ def run_compare(args) -> int:
 
 
 def main() -> int:
+    os.chdir(ROOT)
     ap = argparse.ArgumentParser(
-        description="Run the injection pipeline: inject prompts, then benchmark.",
-        epilog="Unknown args are forwarded to scripts/run_benchmark.py.",
-    )
-    ap.add_argument("--corpus", choices=tuple(LANE_SETS), default="plain",
-                    help="which lane(s) to run: plain (attack_logs, the default); hexa "
-                         "(attack_logs_hexa, auditd fields hex-encoded); both (plain+hexa)")
-    ap.add_argument("--temperatures", nargs="+", choices=experiment.TEMPERATURE_LEVELS,
-                    default=list(experiment.TEMPERATURE_LEVELS),
-                    help="which temperature levels to run, each into its own temp_<t>/ "
-                         "folder: low, medium = 0.0 (greedy) / each model's recommended "
-                         "(default: both)")
-    ap.add_argument("--skip-inject", action="store_true",
-                    help="skip step 1 (reuse the existing injected corpus)")
-    ap.add_argument("--skip-check", action="store_true",
-                    help="skip the context preflight (step 1b)")
-    ap.add_argument("--skip-benchmark", action="store_true",
-                    help="skip step 2 (only rebuild the injected corpus)")
-    ap.add_argument("--skip-summary", action="store_true",
-                    help="skip step 3 (do not (re)build the analysis dir)")
-    ap.add_argument("--skip-charts", action="store_true",
-                    help="skip step 4 (do not (re)draw the per-lane charts)")
-    ap.add_argument("--skip-compare", action="store_true",
-                    help="skip step 5 (the cross-lane comparison charts)")
-    dovsdofs = ap.add_mutually_exclusive_group()
-    dovsdofs.add_argument("--dovsdofs", action="store_true",
-                          help="run ONLY the DOVSDOFS lane (direct override without vs "
-                               "with a SYSTEM: marker): temp low, gpt-oss@medium, "
-                               "llama3.1, gemma3, into *_dovsdofs/ folders")
-    dovsdofs.add_argument("--skip-dovsdofs", action="store_true",
-                          help="do not run the DOVSDOFS lane after the --corpus lane(s)")
-    args, benchmark_args = ap.parse_known_args()
+        description="Run the injection pipeline: inject, preflight, benchmark, summarize, "
+                    "chart. Stages whose output is already up to date are skipped.")
+    run = ap.add_argument_group("what to run (none given = all of them)")
+    run.add_argument("--plain", action="store_true",
+                     help="the plain lane (attack_logs/)")
+    run.add_argument("--hexa", action="store_true",
+                     help="the hex lane (attack_logs_hexa/, every injection site hexed), "
+                          "level low only")
+    run.add_argument("--dovsdofs", action="store_true",
+                     help="the DOVSDOFS lane (direct override without vs with a SYSTEM: "
+                          "marker): level low, gpt-oss@medium, llama3.1, gemma3")
+    run.add_argument("--low", action="store_true",
+                     help="temperature level low = 0.0 (greedy)")
+    run.add_argument("--medium", action="store_true",
+                     help="temperature level medium = each model's recommended")
+    run.add_argument("--skip-reasoning", action="store_true",
+                     help="at medium, leave out gpt-oss @medium/@high (the reasoning "
+                          "experiment); dovsdofs is not affected")
+    run.add_argument("--skip-check", action="store_true",
+                     help="skip the context preflight (step 1b)")
+    narrow = ap.add_argument_group("narrow the benchmark")
+    narrow.add_argument("--runs", type=int, default=None, metavar="N",
+                        help=f"repeats, seeds 42..42+N-1 (default {experiment.DEFAULT_RUNS})")
+    narrow.add_argument("--models", nargs="+", default=None, metavar="MODEL",
+                        help="replace the lane's model list, e.g. llama3.1:8b "
+                             "gpt-oss:20b@high")
+    narrow.add_argument("--categories", nargs="+", default=None, metavar="CATEGORY",
+                        choices=all_categories(),
+                        help="only these injection categories: %(choices)s")
+    narrow.add_argument("--injections", nargs="+", default=None, metavar="ID",
+                        help="only these injection ids or id prefixes, e.g. "
+                             "DO_01_canonical PH_")
+    narrow.add_argument("--logs", nargs="+", default=None, metavar="LOG",
+                        help="only log files whose name contains one of these, e.g. "
+                             "drupal or attack_drupal_cred_access")
+    args = ap.parse_args()
 
-    if not args.dovsdofs:
-        lanes = LANE_SETS[args.corpus]
-        for lane in lanes:
-            rc = run_lane(lane, args, benchmark_args, labelled=True)
+    lanes = [lane for lane in LANES if getattr(args, lane)] or list(LANES)
+    temperatures = ([t for t in experiment.TEMPERATURE_LEVELS if getattr(args, t)]
+                    or list(experiment.TEMPERATURE_LEVELS))
+
+    for lane in lanes:
+        if lane in COMPARE_LANES:
+            rc = run_lane(lane, args, temperatures)
             if rc != 0:
                 return rc
 
-        rc = run_compare(args)
+    if set(lanes) & set(COMPARE_LANES):
+        rc = run_compare(temperatures)
         if rc != 0:
             print(f"\ncomparison step failed (exit {rc}).")
             return rc
 
-    if not args.skip_dovsdofs:
-        rc = run_lane("dovsdofs", args, benchmark_args, labelled=True)
+    if "dovsdofs" in lanes:
+        rc = run_lane("dovsdofs", args, temperatures)
         if rc != 0:
             return rc
 

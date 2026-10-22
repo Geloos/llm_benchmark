@@ -13,11 +13,11 @@ What it does:
 
 How to run it:
   python scripts/check_context.py                    # every model, every log folder
-  python scripts/check_context.py --models llama3.1:8b --num-ctx 32768
+  python scripts/check_context.py --models llama3.1:8b
   python scripts/check_context.py --logs drupal ssh
-  python scripts/check_context.py --all-files        # every injected file, not just the
-                                                     # biggest one per folder
   python scripts/check_context.py --list-only        # trained context only, nothing loaded
+
+  It always probes at run_benchmark.NUM_CTX, the window the benchmark asks for.
 
   A gpt-oss:20b@low/@medium/@high spec is probed once, as gpt-oss:20b: the reasoning level
   changes the output, not how much of the prompt fits.
@@ -109,12 +109,6 @@ def parse_args():
                          "base model (default: every model any temperature runs)")
     ap.add_argument("--logs", nargs="*", default=[],
                     help="only attack folders whose name contains one of these")
-    ap.add_argument("--num-ctx", type=int, default=bench.NUM_CTX,
-                    help=f"context window to probe with (default {bench.NUM_CTX}, the "
-                         "value run_benchmark.py uses)")
-    ap.add_argument("--all-files", action="store_true",
-                    help="probe every injected file instead of the largest per folder "
-                         "(1020 prefills per model -- slow)")
     ap.add_argument("--list-only", action="store_true",
                     help="just print each model's trained context length and quit -- for "
                          "shopping for a replacement model without loading anything")
@@ -130,10 +124,10 @@ def main() -> int:
                       default=0)
         print(f"largest injected file: {biggest} chars (~{biggest // 3}-{biggest // 2} "
               f"tokens for log text)\n")
-        print(f"  {'model':32} {'trained context':>15}  {'fits num_ctx=' + str(args.num_ctx):>22}")
+        print(f"  {'model':32} {'trained context':>15}  {'fits num_ctx=' + str(bench.NUM_CTX):>22}")
         for model in args.models:
             ctx_max, arch = declared_context(model)
-            fits = "unknown" if ctx_max is None else ("yes" if ctx_max >= args.num_ctx
+            fits = "unknown" if ctx_max is None else ("yes" if ctx_max >= bench.NUM_CTX
                                                      else f"NO (max {ctx_max})")
             shown = ctx_max if ctx_max is not None else (arch.split("(")[0].strip() or "?")
             print(f"  {model:32} {str(shown)[:15]:>15}  {fits:>22}")
@@ -150,32 +144,31 @@ def main() -> int:
     for folder in folders:
         files = sorted(folder.glob("*.txt"), key=lambda p: p.stat().st_size, reverse=True)
         if files:
-            targets.extend(files if args.all_files else files[:1])
+            targets.append(files[0])
 
     print(f"probing {len(targets)} file(s) x {len(args.models)} model(s) "
-          f"at num_ctx={args.num_ctx} (largest file per log folder"
-          f"{'; --all-files' if args.all_files else ''})\n")
+          f"at num_ctx={bench.NUM_CTX} (largest file per log folder)\n")
 
     rows, bad = [], 0
     for model in args.models:
         ctx_max, arch = declared_context(model)
         if ctx_max is None:
             print(f"{model:22} trained context: unknown ({arch})")
-        elif ctx_max < args.num_ctx:
+        elif ctx_max < bench.NUM_CTX:
             print(f"{model:22} trained context: {ctx_max} ({arch})  "
-                  f"*** OVER-MAX: benchmark asks for {args.num_ctx}; anything above "
+                  f"*** OVER-MAX: benchmark asks for {bench.NUM_CTX}; anything above "
                   f"{ctx_max} is extrapolated or clamped ***")
         else:
-            print(f"{model:22} trained context: {ctx_max} ({arch})  ok for {args.num_ctx}")
+            print(f"{model:22} trained context: {ctx_max} ({arch})  ok for {bench.NUM_CTX}")
 
-        limit = min(args.num_ctx, ctx_max) if ctx_max else args.num_ctx
+        limit = min(bench.NUM_CTX, ctx_max) if ctx_max else bench.NUM_CTX
         print(f"  {'log':30} {'file':26} {'chars':>7} {'tokens':>7} {'c/t':>5} "
               f"{'headroom':>9}  verdict")
         split = None
         for txt in targets:
             text = txt.read_text(encoding="utf-8", errors="replace")
             try:
-                data = probe(model, text, args.num_ctx)
+                data = probe(model, text, bench.NUM_CTX)
                 tokens = int(data.get("prompt_eval_count") or 0)
                 note = ""
                 if split is None:
@@ -199,7 +192,7 @@ def main() -> int:
                 "model": experiment.sanitize(model), "trained_context": ctx_max or "",
                 "log": txt.parent.name, "file": txt.stem, "chars": len(text),
                 "prompt_tokens": tokens, "chars_per_token": round(ratio, 2),
-                "num_ctx": args.num_ctx, "effective_limit": limit,
+                "num_ctx": bench.NUM_CTX, "effective_limit": limit,
                 "headroom": limit - tokens, "verdict": v, "error": note,
             })
         split = split or {"gpu_pct": "", "size": "", "size_vram": "",
@@ -207,7 +200,7 @@ def main() -> int:
         if split["gpu_pct"] != "":
             print(f"  ollama ps: GPU {split['gpu_pct']:g}% / CPU "
                   f"{100 - split['gpu_pct']:g}%  ({split['size_vram'] / 2**30:.1f} of "
-                  f"{split['size'] / 2**30:.1f} GiB in VRAM at num_ctx={args.num_ctx})")
+                  f"{split['size'] / 2**30:.1f} GiB in VRAM at num_ctx={bench.NUM_CTX})")
         else:
             print(f"  ollama ps: GPU/CPU split unknown ({split['ps_error']})")
         for row in rows:
@@ -229,7 +222,8 @@ def main() -> int:
         print("\nFIX BEFORE RUNNING: an ERROR row means the probe never completed (ollama "
               "down, or the KV cache for this num_ctx does not fit on the GPU). A "
               "TRUNCATED/OVER-MAX row means the model never saw the head of that log, so "
-              "its verdict is not about the file you think it is -- raise --num-ctx if "
+              "its verdict is not about the file you think it is -- raise NUM_CTX in "
+              "run_benchmark.py if "
               "the model's trained context allows, otherwise run that model on the logs "
               "that do fit and report the reduced coverage.")
     return 1 if bad else 0
