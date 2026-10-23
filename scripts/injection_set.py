@@ -26,6 +26,11 @@ What it outputs:
   A rotating row's stage is {"rotate": "clockwise", "variants": [{"guess", "payload",
   "tag"}, ...]} instead; inject_prompts.pick_stage() resolves it per marker.
 
+  A row carrying `base16_of` (the OB lane, jailbreaks/ob.jsonl) holds its payload as
+  Base16 -- auditd's hex -- behind a decode instruction. Its `payload` and `tag` must both
+  end with the uppercase hex of `base16_of`, so a hand-edited blob cannot drift from the
+  plaintext it claims to encode.
+
   PAIRED_CATEGORIES names the categories whose ids are <pair>_<variant>, one variant
   being BASE_VARIANT (dovsdofs: the same direct override without and with a SYSTEM:
   marker, in jailbreaks/dovsdofs.jsonl, run as its own lane). summarize_results.py and
@@ -68,6 +73,8 @@ def read_rows(path):
                 if missing:
                     sys.exit('ERROR: %s line %d (%s) is missing: %s'
                              % (path, lineno, rec.get('id', '?'), ', '.join(missing)))
+                if 'base16_of' in rec:
+                    check_base16(path, lineno, rec)
             rows.append((lineno, rec))
     return rows
 
@@ -93,6 +100,14 @@ def check_variants(path, lineno, rec):
         if template is not None and template.replace('{guess}', v['guess']) != v['payload']:
             sys.exit('ERROR: %s variant %d (%r): payload does not match the template'
                      % (where, i, v['guess']))
+
+
+def check_base16(path, lineno, rec):
+    blob = rec['base16_of'].encode('utf-8').hex().upper()
+    for key in ('payload', 'tag'):
+        if not rec[key].endswith(blob):
+            sys.exit('ERROR: %s line %d (%s): %s does not end with the Base16 of base16_of'
+                     % (path, lineno, rec['id'], key))
 
 
 def to_stage(rec):

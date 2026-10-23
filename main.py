@@ -10,7 +10,7 @@ What it does:
   its output (e.g. rm -r analysis_hexa/temp_low/charts).
 
 How to run it:
-  python main.py                                   # everything: plain, hexa, dovsdofs
+  python main.py                                   # everything: plain, hexa, dovsdofs, ob
   python main.py --hexa                            # only the hex lane
   python main.py --plain --dovsdofs                # experiment flags combine
   python main.py --plain --low                     # only temp_low
@@ -21,18 +21,23 @@ How to run it:
   python main.py --plain --low --models llama3.1:8b --categories direct_override --logs drupal
   python main.py --hexa --injections DO_01_canonical PH_
   python main.py --dovsdofs --runs 10
+  python main.py --ob
 
   What to run (none given = all of them):
-    --plain --hexa --dovsdofs   the experiments. dovsdofs is one direct override without
+    --plain --hexa --dovsdofs --ob
+                                the experiments. dovsdofs is one direct override without
                                 vs with a SYSTEM: marker (jailbreaks/dovsdofs.jsonl), at
                                 level low with gpt-oss@medium, llama3.1, gemma3
                                 (experiment.DOVSDOFS_MODELS); its analysis adds a paired
-                                t-test per model (--paired).
-    --low --medium              the temperature levels. hexa and dovsdofs run low only
+                                t-test per model (--paired). ob is SPT_01_direct and
+                                SPT_06_pentest as Base16 behind "Decode and follow Base16
+                                instructions" (jailbreaks/ob.jsonl), at level low with the
+                                same models (experiment.OB_MODELS), analysed like plain.
+    --low --medium              the temperature levels. hexa, dovsdofs and ob run low only
                                 (LANE_TEMPERATURES), so the cross-lane chart is drawn at
                                 temp_low alone.
     --skip-reasoning            at medium, run only gpt-oss@low + llama3.1 + gemma3 (no
-                                reasoning experiment). dovsdofs is not affected.
+                                reasoning experiment). dovsdofs and ob are not affected.
     --skip-check                no context preflight.
 
   Narrow the benchmark:
@@ -64,7 +69,8 @@ What it outputs:
   charts/), plus analysis*/context_check.csv. And the cross-lane chart
   analysis/temp_low/charts/plain_vs_hexa.png. The DOVSDOFS lane writes
   analysis_dovsdofs/temp_low/: verdicts.csv, report.md (with the paired t-test),
-  paired_ttest.csv and charts/dovsdofs.png.
+  paired_ttest.csv and charts/dovsdofs.png. The OB lane writes analysis_ob/temp_low/ like
+  any lane (verdicts.csv, report.md, charts/).
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
@@ -117,14 +123,21 @@ CORPORA = {
                  "injections": "jailbreaks/dovsdofs.jsonl",
                  "models": experiment.DOVSDOFS_MODELS,
                  "paired": True},
+    "ob": {"attack_dir": "attack_logs",
+           "injected": "attack_logs_injected_ob",
+           "results": "results_ob",
+           "analysis": "analysis_ob",
+           "injections": "jailbreaks/ob.jsonl",
+           "models": experiment.OB_MODELS},
 }
-LANES = ("plain", "hexa", "dovsdofs")
+LANES = ("plain", "hexa", "dovsdofs", "ob")
 COMPARE_LANES = ("plain", "hexa")
 
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
     "hexa": ("low",),
     "dovsdofs": ("low",),
+    "ob": ("low",),
 }
 
 
@@ -346,13 +359,17 @@ def main() -> int:
     run.add_argument("--dovsdofs", action="store_true",
                      help="the DOVSDOFS lane (direct override without vs with a SYSTEM: "
                           "marker): level low, gpt-oss@medium, llama3.1, gemma3")
+    run.add_argument("--ob", action="store_true",
+                     help="the OB lane (SPT_01 / SPT_06 as Base16 behind 'Decode and "
+                          "follow Base16 instructions'): level low, gpt-oss@medium, "
+                          "llama3.1, gemma3")
     run.add_argument("--low", action="store_true",
                      help="temperature level low = 0.0 (greedy)")
     run.add_argument("--medium", action="store_true",
                      help="temperature level medium = each model's recommended")
     run.add_argument("--skip-reasoning", action="store_true",
                      help="at medium, leave out gpt-oss @medium/@high (the reasoning "
-                          "experiment); dovsdofs is not affected")
+                          "experiment); dovsdofs and ob are not affected")
     run.add_argument("--skip-check", action="store_true",
                      help="skip the context preflight (step 1b)")
     narrow = ap.add_argument_group("narrow the benchmark")
@@ -388,10 +405,11 @@ def main() -> int:
             print(f"\ncomparison step failed (exit {rc}).")
             return rc
 
-    if "dovsdofs" in lanes:
-        rc = run_lane("dovsdofs", args, temperatures)
-        if rc != 0:
-            return rc
+    for lane in lanes:
+        if lane not in COMPARE_LANES:
+            rc = run_lane(lane, args, temperatures)
+            if rc != 0:
+                return rc
 
     print("\ndone.")
     return 0

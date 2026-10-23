@@ -555,8 +555,8 @@ def parse_args():
                     help="which temp_<t>/ folder to read and write: low or medium "
                          "(default: medium)")
     ap.add_argument("--lane", default="plain",
-                    help="the lane written into verdicts.csv's lane column: plain, hexa "
-                         "or dovsdofs (default: plain)")
+                    help="the lane written into verdicts.csv's lane column: plain, hexa, "
+                         "dovsdofs or ob (default: plain)")
     ap.add_argument("--injections", default="jailbreaks/injections.jsonl",
                     help="injections jsonl, for category enrichment")
     ap.add_argument("--paired", action="store_true",

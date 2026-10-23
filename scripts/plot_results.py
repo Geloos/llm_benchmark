@@ -11,7 +11,8 @@ What it does:
 
   The overview, per-category and top-injections charts show gpt-oss at its temperature-
   experiment level (@low) only, beside llama3.1 and gemma3, so temp_medium draws the same
-  series as temp_low; @medium and @high appear in the reasoning charts alone.
+  series as temp_low; @medium and @high appear in the reasoning charts alone. A lane with
+  a single gpt-oss level (the OB lane's @medium) charts that level as its gpt-oss series.
 
   When verdicts.csv holds more than one seed (every temperature, 5 by default), the rate is
   computed per seed and the bar is the mean across seeds (the ASR), with a whisker of
@@ -706,9 +707,9 @@ def main() -> None:
 
     rank = {level: i for i, level in enumerate(experiment.REASONING_LEVELS)}
     level_rank = lambda m: rank.get(experiment.reasoning_level(m), -1)
-    models = [m for m in all_models if experiment.reasoning_level(m)
-              in (None, experiment.TEMPERATURE_EXPERIMENT_THINK)] or all_models
     levels = sorted((m for m in all_models if experiment.reasoning_level(m)), key=level_rank)
+    models = [m for m in all_models if len(levels) < 2 or experiment.reasoning_level(m)
+              in (None, experiment.TEMPERATURE_EXPERIMENT_THINK)] or all_models
 
     slot_of = {model: i for i, model in
                enumerate(models + [m for m in levels if m not in models])}

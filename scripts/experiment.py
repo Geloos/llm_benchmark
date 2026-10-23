@@ -50,6 +50,7 @@ What it outputs:
                      no t). Used for the DOVSDOFS lane, whose two variants share model,
                      logs and seed, so seed i of one pairs with seed i of the other.
       DOVSDOFS lane  DOVSDOFS_MODELS: gpt-oss@medium, llama3.1, gemma3, at level low only.
+      OB lane        OB_MODELS: the same models, at level low only.
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
 """
 
@@ -83,6 +84,7 @@ T975 = (12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228,
 GPT_OSS = "gpt-oss:20b"
 OTHER_MODELS = ["llama3.1:8b", "gemma3:12b"]
 DOVSDOFS_MODELS = ["%s@medium" % GPT_OSS] + OTHER_MODELS
+OB_MODELS = DOVSDOFS_MODELS
 
 
 def check_level(temp: str) -> None:
