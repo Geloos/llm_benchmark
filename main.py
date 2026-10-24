@@ -27,13 +27,14 @@ How to run it:
     --plain --hexa --dovsdofs --ob
                                 the experiments. dovsdofs is one direct override without
                                 vs with a SYSTEM: marker (jailbreaks/dovsdofs.jsonl), at
-                                level low with gpt-oss@medium, llama3.1, gemma3
+                                levels low and medium with gpt-oss@medium, llama3.1, gemma3
                                 (experiment.DOVSDOFS_MODELS); its analysis adds a paired
                                 t-test per model (--paired). ob is SPT_01_direct and
                                 SPT_06_pentest as Base16 behind "Decode and follow Base16
-                                instructions" (jailbreaks/ob.jsonl), at level low with the
-                                same models (experiment.OB_MODELS), analysed like plain.
-    --low --medium              the temperature levels. hexa, dovsdofs and ob run low only
+                                instructions" (jailbreaks/ob.jsonl), at levels low and
+                                medium with the same models (experiment.OB_MODELS),
+                                analysed like plain.
+    --low --medium              the temperature levels. hexa runs low only
                                 (LANE_TEMPERATURES), so the cross-lane chart is drawn at
                                 temp_low alone.
     --skip-reasoning            at medium, run only gpt-oss@low + llama3.1 + gemma3 (no
@@ -68,8 +69,8 @@ What it outputs:
   verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
   charts/), plus analysis*/context_check.csv. And the cross-lane chart
   analysis/temp_low/charts/plain_vs_hexa.png. The DOVSDOFS lane writes
-  analysis_dovsdofs/temp_low/: verdicts.csv, report.md (with the paired t-test),
-  paired_ttest.csv and charts/dovsdofs.png. The OB lane writes analysis_ob/temp_low/ like
+  analysis_dovsdofs/temp_<t>/: verdicts.csv, report.md (with the paired t-test),
+  paired_ttest.csv and charts/dovsdofs.png. The OB lane writes analysis_ob/temp_<t>/ like
   any lane (verdicts.csv, report.md, charts/).
 
   Sampling, temperatures, seeds and the model set per temperature live in
@@ -136,8 +137,8 @@ COMPARE_LANES = ("plain", "hexa")
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
     "hexa": ("low",),
-    "dovsdofs": ("low",),
-    "ob": ("low",),
+    "dovsdofs": experiment.TEMPERATURE_LEVELS,
+    "ob": experiment.TEMPERATURE_LEVELS,
 }
 
 
@@ -358,11 +359,12 @@ def main() -> int:
                           "level low only")
     run.add_argument("--dovsdofs", action="store_true",
                      help="the DOVSDOFS lane (direct override without vs with a SYSTEM: "
-                          "marker): level low, gpt-oss@medium, llama3.1, gemma3")
+                          "marker): levels low and medium, gpt-oss@medium, llama3.1, "
+                          "gemma3")
     run.add_argument("--ob", action="store_true",
                      help="the OB lane (SPT_01 / SPT_06 as Base16 behind 'Decode and "
-                          "follow Base16 instructions'): level low, gpt-oss@medium, "
-                          "llama3.1, gemma3")
+                          "follow Base16 instructions'): levels low and medium, "
+                          "gpt-oss@medium, llama3.1, gemma3")
     run.add_argument("--low", action="store_true",
                      help="temperature level low = 0.0 (greedy)")
     run.add_argument("--medium", action="store_true",

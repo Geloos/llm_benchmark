@@ -10,7 +10,7 @@ What it does:
   summarize_results.py and plot_results.py.
 
 How to run it:
-  Not a CLI. Import it:  import experiment;  experiment.options_for("llama3.1:8b", "medium", 42, 100000)
+  Not a CLI. Import it:  import experiment;  experiment.options_for("llama3.1:8b", "medium", 42, 120000)
 
 What it outputs:
   Nothing. The settings it holds:
@@ -49,8 +49,8 @@ What it outputs:
                      Student-t CDF (t_pvalue(), a regularized incomplete beta; stdlib has
                      no t). Used for the DOVSDOFS lane, whose two variants share model,
                      logs and seed, so seed i of one pairs with seed i of the other.
-      DOVSDOFS lane  DOVSDOFS_MODELS: gpt-oss@medium, llama3.1, gemma3, at level low only.
-      OB lane        OB_MODELS: the same models, at level low only.
+      DOVSDOFS lane  DOVSDOFS_MODELS: gpt-oss@medium, llama3.1, gemma3, at both levels.
+      OB lane        OB_MODELS: the same models, at both levels.
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
 """
 
