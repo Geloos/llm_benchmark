@@ -24,7 +24,7 @@ How to run it:
 
 What it outputs:
   A per-model table on stdout (log, file, chars, tokens, chars/token, headroom, verdict)
-  and GPU/CPU split, plus analysis/context_check.csv (the split in gpu_pct, size_bytes,
+  and GPU/CPU split, plus analysis/analysis_plaintext/context_check.csv (the split in gpu_pct, size_bytes,
   size_vram_bytes). Exit code 1 if anything came back TRUNCATED, OVER-MAX
   or ERROR, so main.py can stop before wasting a full run.
 """
@@ -102,8 +102,8 @@ def base_models(specs):
 
 def parse_args():
     ap = argparse.ArgumentParser(description="Prove the models see the whole log.")
-    ap.add_argument("--input-root", default="attack_logs_injected")
-    ap.add_argument("--out", default="analysis/context_check.csv")
+    ap.add_argument("--input-root", default="attack_logs_injected/attack_logs_injected_plaintext")
+    ap.add_argument("--out", default="analysis/analysis_plaintext/context_check.csv")
     ap.add_argument("--models", nargs="*", default=experiment.all_models(),
                     help="model specs; @reasoning suffixes are folded into one probe per "
                          "base model (default: every model any temperature runs)")

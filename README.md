@@ -1,31 +1,69 @@
 # LLM log-classifier injection benchmark
 
-Real MITRE ATT&CK attack logs, seeded with jailbreak payloads, are classified by local LLMs
-through Ollama. Every log is a real attack, so any verdict other than "attack" means the
-injection succeeded. See `CLAUDE.md` for how the pipeline works.
+Real MITRE ATT&CK attack logs are seeded with jailbreak payloads and given to local LLMs
+(through Ollama), which are asked to classify each log as attack or normal. Every log is a
+real attack, so any verdict other than "attack" means the injection worked. The share of
+calls that were tricked is the **ASR** (attack success rate).
 
-## Running it
+Models: `gpt-oss:20b`, `llama3.1:8b`, `gemma3:12b`.
+
+## How to run it
 
 ```bash
 pip install -r requirements.txt
-python main.py                                # plain (low + medium), hexa (low), dovsdofs (low), 5 runs each; done stages are skipped
-python main.py --help                         # pick lanes (--plain --hexa --dovsdofs), levels (--low --medium), filters
+python main.py                 # every experiment, every temperature
+python main.py --help          # all the flags
 ```
 
-## Reading the results
+Ollama must be running with the three models pulled. Finished stages are skipped, so
+re-running `python main.py` only does what is missing. To redo a stage, delete its output.
 
-- **Only the model's randomness is accounted for.** Every series runs 5 times (seeds
-  42..46). Each rate is computed per run over the logs, and reported as the mean ± the
-  sample std across the runs. The std says how much a result moves from one run to the
-  next on these same logs; it says nothing about how the result would carry over to other
-  attack logs, and no claim is made about that.
-- **Temperature is a level, not a number.** Every model runs at its own recommended
-  sampling (`experiment.RECOMMENDED`), and the levels are relative to it: `low` = 0.0
-  (greedy), `medium` = recommended. So `medium` is 0.6 for llama3.1 but 1.0 for gemma3 and
-  gpt-oss. At `low` the std should be 0; a non-zero one means the GPU did not repeat itself.
-- **Two experiments.** The temperature experiment runs every level × gpt-oss `@low`,
-  llama3.1 and gemma3. The reasoning experiment runs at `medium` (gpt-oss's recommended
-  sampling) with gpt-oss `@low`, `@medium` and `@high`. Both use 5 runs per series, and
-  `medium` × `@low` is shared. The temperature comparison for gpt-oss covers `@low` only.
-- **No clean baseline.** There is no clean (no-injection) run, so detection on clean logs
-  is not measured. Every tricked verdict is attributed to the injection.
+Run only part of it:
+
+```bash
+python main.py --plain                 # one experiment (--plain --hexa --dovsdofs --ob)
+python main.py --plain --low           # one temperature (--low --medium)
+python main.py --plain --skip-reasoning
+python main.py --models llama3.1:8b --categories direct_override --logs drupal
+python main.py --injections DO_01_canonical PH_ --runs 1
+```
+
+## The pipeline
+
+For each experiment, `main.py` runs these steps in order:
+
+| step | script | what it does |
+|---|---|---|
+| 1 inject | `scripts/inject_prompts.py` | writes the jailbreaks into copies of the attack logs |
+| 1b preflight | `scripts/check_context.py` | checks no log is too long for a model's context window |
+| 2 benchmark | `scripts/run_benchmark.py` | asks every model to classify every injected log, for every seed |
+| 3 summarize | `scripts/summarize_results.py` | parses the replies and computes the ASR (`calls.jsonl`, `asr.csv`, `report.md`) |
+| 4 charts | `scripts/plot_results.py` | bar charts of the ASR (PDFs in `charts/`) |
+| 5 temperature | `scripts/compare_temperatures.py` | plain experiment only: low vs medium ASR side by side |
+
+Folders:
+
+- `attack_logs/` — the source logs (tracked)
+- `jailbreaks/` — the injections
+- `attack_logs_injected/`, `results/`, `analysis/` — generated
+
+Results are the mean ASR across seeds, with a 95% interval across the seeds. There are no
+significance tests: compare the mean ASRs directly.
+
+## The experiments
+
+Every run is repeated with **5 seeds (42–46)**. There are two temperature levels:
+**low** = 0.0 (greedy) and **medium** = each model's recommended temperature (llama 0.6,
+gemma and gpt-oss 1.0).
+
+| experiment | flag | temperatures | models | question |
+|---|---|---|---|---|
+| plain | `--plain` | low, medium | gpt-oss (reasoning low), llama3.1, gemma3 | which jailbreaks work, as readable text? |
+| reasoning | part of `--plain` | medium | gpt-oss at reasoning low / medium / high | does more reasoning resist better? |
+| hex | `--hexa` | low | gpt-oss (reasoning low), llama3.1, gemma3 | do they still work when the log stores them as hex? |
+| DOVSDOFS | `--dovsdofs` | low, medium | gpt-oss (reasoning medium), llama3.1, gemma3 | does a `SYSTEM:` prefix make a direct override stronger? |
+| OB | `--ob` | low, medium | gpt-oss (reasoning medium), llama3.1, gemma3 | does hex work if the model is told to decode it? |
+
+The plain experiment uses 47 injections in 10 categories (`jailbreaks/injections.jsonl`).
+Its results are also compared across temperatures, low vs medium per model
+(`analysis/analysis_temperature/`).

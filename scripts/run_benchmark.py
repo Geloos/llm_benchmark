@@ -17,9 +17,10 @@ How to run it:
   python run_benchmark.py --models llama3.1:8b --injections DO_01_canonical
 
   # the hex lane
-  python run_benchmark.py --input-root attack_logs_injected_hexa --results-root results_hexa
+  python run_benchmark.py --input-root attack_logs_injected/attack_logs_injected_hexa \
+      --results-root results/results_hexa
 
-  # greedy (temperature 0) at seeds 42..46 (writes results/temp_low/seed_<n>/)
+  # greedy (temperature 0) at seeds 42..46 (writes results/results_plaintext/temp_low/seed_<n>/)
   python run_benchmark.py --temperature low
 
   # only some of the repeats, e.g. a first pass at 3 seeds
@@ -325,9 +326,9 @@ def keep_truncated(dest: Path, log_file: Path, reply: Path, meta: Path) -> Path:
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(description="MIRANDA injection benchmark (light).")
-    ap.add_argument("--input-root", default="attack_logs_injected",
+    ap.add_argument("--input-root", default="attack_logs_injected/attack_logs_injected_plaintext",
                     help="folder holding the per-attack injected-log folders")
-    ap.add_argument("--results-root", default="results",
+    ap.add_argument("--results-root", default="results/results_plaintext",
                     help="where to write model outputs")
     ap.add_argument("--logs", nargs="*", default=[],
                     help="only attack folders whose name contains one of these (default: all)")

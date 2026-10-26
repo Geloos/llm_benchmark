@@ -2,20 +2,11 @@
 .venv/
 
 # generated outputs
-# NB attack_logs/ and attack_logs_hexa/ are SOURCE corpora and are tracked; only the
-# injected copies and everything downstream of them is generated.
+# NB attack_logs/attack_logs_plaintext/ and attack_logs/attack_logs_hexa/ are SOURCE
+# corpora and are tracked; only the injected copies and everything downstream is generated.
 attack_logs_injected/
 results/
 analysis/
-attack_logs_injected_hexa/
-results_hexa/
-analysis_hexa/
-attack_logs_injected_dovsdofs/
-results_dovsdofs/
-analysis_dovsdofs/
-attack_logs_injected_ob/
-results_ob/
-analysis_ob/
 truncated/
 
 # notebook checkpoints

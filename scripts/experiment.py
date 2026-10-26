@@ -35,20 +35,19 @@ What it outputs:
                      Both repeat every series DEFAULT_RUNS = 5 times (seeds 42..46), so
                      models_for("medium") lists five series and models_for("low") three:
                      8 x 5 = 40 model runs per lane.
-      seeds          one folder each: <root>/temp_<t>/seed_<n>, so a result is reported as
-                     mean +- std across the runs. Level low is repeated too: greedy decoding
-                     on a GPU is not guaranteed to be deterministic, and its std across
-                     the runs is what shows that. --runs N takes seeds 42..42+N-1.
+      seeds          one folder each: <root>/temp_<t>/seed_<n>. Level low is repeated too:
+                     greedy decoding on a GPU is not guaranteed to be deterministic, and the
+                     std across the runs is what shows that. --runs N takes seeds
+                     42..42+N-1.
       run_idx        the 1-based position of a seed in that sequence (42 -> 1).
-      ASR +- 95% CI  mean_ci(): a rate's mean across the seeds, its sample std, and the
-                     half-width of its two-sided 95% Student-t confidence interval,
-                     t(0.975, n-1) * std / sqrt(n). Shared by summarize_results.py and
-                     plot_results.py so the report and the whiskers agree.
-      paired t-test  paired_t(base, marked): the per-seed differences marked - base, their
-                     mean, t = mean / (std / sqrt(n)) and the exact two-sided p from the
-                     Student-t CDF (t_pvalue(), a regularized incomplete beta; stdlib has
-                     no t). Used for the DOVSDOFS lane, whose two variants share model,
-                     logs and seed, so seed i of one pairs with seed i of the other.
+      ASR +- 95% CI  asr_stats() / mean_ci(): the ASR per seed (over the logs), its mean
+                     across the seeds, the sample std, and the half-width of the two-sided
+                     95% Student-t interval, t(0.975, n-1) * std / sqrt(n) -- 2.776 * std /
+                     sqrt(5) at the default five seeds (T975 is a table for df 1..30, a
+                     Cornish-Fisher expansion past it; stdlib has no t). It measures the
+                     run-to-run variance of the LLM on these 17 logs, not how the result
+                     generalises to other logs. Shared by summarize_results.py and
+                     plot_results.py, so asr.csv, report.md and the whiskers agree.
       DOVSDOFS lane  DOVSDOFS_MODELS: gpt-oss@medium, llama3.1, gemma3, at both levels.
       OB lane        OB_MODELS: the same models, at both levels.
       result dirs    sanitize(spec): ':' and '/' -> '_', so "gpt-oss_20b@high"
@@ -57,6 +56,7 @@ What it outputs:
 import math
 import re
 import statistics
+from collections import defaultdict
 from pathlib import Path
 
 RECOMMENDED = {
@@ -122,6 +122,24 @@ def parse_model(spec: str):
 def reasoning_level(model_dir: str):
     m = REASONING_RE.search(model_dir)
     return m.group(1) if m else None
+
+
+def model_sort_key(model_dir: str):
+    level = reasoning_level(model_dir)
+    rank = REASONING_LEVELS.index(level) if level else -1
+    return model_dir.partition("@")[0], rank
+
+
+def reasoning_series(models) -> list:
+    levels = sorted((m for m in models if reasoning_level(m)), key=model_sort_key)
+    return levels if len(levels) > 1 else []
+
+
+def temperature_series(models) -> list:
+    if not reasoning_series(models):
+        return list(models)
+    return [m for m in models
+            if reasoning_level(m) in (None, TEMPERATURE_EXPERIMENT_THINK)] or list(models)
 
 
 def sanitize(name: str) -> str:
@@ -198,52 +216,20 @@ def mean_ci(rates):
     return mean, std, t975(len(rates) - 1) * std / math.sqrt(len(rates))
 
 
-def _betacf(a: float, b: float, x: float) -> float:
-    tiny = 1e-300
-    c, d = 1.0, 1.0 - (a + b) * x / (a + 1.0)
-    d = 1.0 / (d if abs(d) > tiny else tiny)
-    h = d
-    for m in range(1, 300):
-        for num in (m * (b - m) * x / ((a + 2 * m - 1) * (a + 2 * m)),
-                    -(a + m) * (a + b + m) * x / ((a + 2 * m) * (a + 2 * m + 1))):
-            d = 1.0 + num * d
-            d = 1.0 / (d if abs(d) > tiny else tiny)
-            c = 1.0 + num / c
-            c = c if abs(c) > tiny else tiny
-            h *= d * c
-        if abs(d * c - 1.0) < 1e-14:
-            break
-    return h
-
-
-def _betainc(a: float, b: float, x: float) -> float:
-    if x <= 0.0:
-        return 0.0
-    if x >= 1.0:
-        return 1.0
-    front = math.exp(math.lgamma(a + b) - math.lgamma(a) - math.lgamma(b)
-                     + a * math.log(x) + b * math.log(1.0 - x))
-    if x < (a + 1.0) / (a + b + 2.0):
-        return front * _betacf(a, b, x) / a
-    return 1.0 - front * _betacf(b, a, 1.0 - x) / b
-
-
-def t_pvalue(t: float, df: int) -> float:
-    if math.isinf(t):
-        return 0.0
-    return _betainc(df / 2.0, 0.5, df / (df + t * t))
-
-
-def paired_t(base, marked):
-    diffs = [round(m - b, 12) for b, m in zip(base, marked)]
-    n = len(diffs)
-    if n < 2:
-        return None
-    dbar = sum(diffs) / n
-    se = statistics.stdev(diffs) / math.sqrt(n)
-    if se == 0:
-        if dbar == 0:
-            return {"dbar": 0.0, "t": None, "df": n - 1, "p": None}
-        return {"dbar": dbar, "t": math.copysign(math.inf, dbar), "df": n - 1, "p": 0.0}
-    t = dbar / se
-    return {"dbar": dbar, "t": t, "df": n - 1, "p": t_pvalue(t, n - 1)}
+def asr_stats(calls) -> dict:
+    """calls: (log, seed, tricked) for every call of one cell. The ASR per seed (tricked /
+    calls in that seed), their mean, sample std and t-interval half-width (mean_ci), and
+    the interval clipped to [0, 1]. std / ci / low / high are None with one seed."""
+    logs = set()
+    per_seed = defaultdict(lambda: [0, 0])
+    for log, seed, hit in calls:
+        logs.add(log)
+        per_seed[seed][0] += hit
+        per_seed[seed][1] += 1
+    mean, std, ci = mean_ci([t / c for _, (t, c) in sorted(per_seed.items())])
+    return {"asr": mean, "std": std, "ci": ci,
+            "low": None if ci is None else max(0.0, mean - ci),
+            "high": None if ci is None else min(1.0, mean + ci),
+            "logs": len(logs), "seeds": len(per_seed),
+            "calls": sum(c for _, c in per_seed.values()),
+            "tricked": sum(t for t, _ in per_seed.values())}

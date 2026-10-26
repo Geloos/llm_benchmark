@@ -4,10 +4,9 @@ main.py
 
 What it does:
   Runs the whole pipeline for one or more lanes: inject -> context preflight, then per
-  temperature: benchmark the injected logs -> summarize -> charts, then a cross-lane
-  comparison chart per temperature. Every stage skips itself when its output is already
-  on disk and up to date, so a re-run only does what is missing. To force a stage, delete
-  its output (e.g. rm -r analysis_hexa/temp_low/charts).
+  temperature: benchmark the injected logs -> summarize -> charts. Every stage skips itself
+  when its output is already on disk and up to date, so a re-run only does what is
+  missing. To force a stage, delete its output (e.g. rm -r analysis/analysis_hexa/temp_low/charts).
 
 How to run it:
   python main.py                                   # everything: plain, hexa, dovsdofs, ob
@@ -28,15 +27,14 @@ How to run it:
                                 the experiments. dovsdofs is one direct override without
                                 vs with a SYSTEM: marker (jailbreaks/dovsdofs.jsonl), at
                                 levels low and medium with gpt-oss@medium, llama3.1, gemma3
-                                (experiment.DOVSDOFS_MODELS); its analysis adds a paired
-                                t-test per model (--paired). ob is SPT_01_direct and
+                                (experiment.DOVSDOFS_MODELS), charted as one chart
+                                (--paired). ob is SPT_01_direct and
                                 SPT_06_pentest as Base16 behind "Decode and follow Base16
                                 instructions" (jailbreaks/ob.jsonl), at levels low and
                                 medium with the same models (experiment.OB_MODELS),
-                                analysed like plain.
+                                charted as one chart (--by-injection).
     --low --medium              the temperature levels. hexa runs low only
-                                (LANE_TEMPERATURES), so the cross-lane chart is drawn at
-                                temp_low alone.
+                                (LANE_TEMPERATURES).
     --skip-reasoning            at medium, run only gpt-oss@low + llama3.1 + gemma3 (no
                                 reasoning experiment). dovsdofs and ob are not affected.
     --skip-check                no context preflight.
@@ -57,21 +55,32 @@ How to run it:
                    log, the jsonl and the injector's code
     1b preflight   --skip-check, or no benchmark call is pending at any level of the lane
     2  benchmark   no result file is missing for that level and those filters
-    3  summarize   verdicts.csv + report.md exist and verdicts.csv is newer than every
-                   result *.txt / *.meta.json under results*/temp_<t>/ and the jsonl
-    4  charts      the overview PNG (dovsdofs.png for the paired lane) is newer than
-                   verdicts.csv
-    5  compare     plain_vs_hexa.png is newer than both lanes' verdicts.csv
+    3  summarize   calls.jsonl + report.md exist and calls.jsonl is newer than every
+                   result *.txt / *.meta.json under results/results_<lane>/temp_<t>/
+                   and the jsonl
+    4  charts      the lane's sentinel chart (asr_by_model.pdf, dovsdofs.pdf for the
+                   paired lane, obfuscation.pdf for ob) is newer than calls.jsonl, per
+                   analysis folder (analysis/analysis_reasoning/ included)
+    5  compare     plain lane only, once analysis/analysis_plaintext/temp_low and
+                   temp_medium both have a calls.jsonl (whichever levels this run asked
+                   for): skipped when analysis/analysis_temperature/temperature.csv is
+                   newer than both
+    5b its charts  analysis/analysis_temperature/charts/temperature.pdf newer than that csv
 
 What it outputs:
-  Per lane: attack_logs_injected*/, then one temp_<t>/ folder per temperature under
-  results*/ and analysis*/ (verdicts.csv,
-  verdicts_by_injection.csv, summary.jsonl, report.md, reasoning_report.md at temp_medium,
-  charts/), plus analysis*/context_check.csv. And the cross-lane chart
-  analysis/temp_low/charts/plain_vs_hexa.png. The DOVSDOFS lane writes
-  analysis_dovsdofs/temp_<t>/: verdicts.csv, report.md (with the paired t-test),
-  paired_ttest.csv and charts/dovsdofs.png. The OB lane writes analysis_ob/temp_<t>/ like
-  any lane (verdicts.csv, report.md, charts/).
+  Four parent folders, one subfolder per lane (CORPORA; the plain lane is _plaintext):
+    attack_logs/attack_logs_<plaintext|hexa>/          the two source corpora (tracked)
+    attack_logs_injected/attack_logs_injected_<lane>/  injected logs
+    results/results_<lane>/temp_<t>/seed_<n>/          model replies
+    analysis/analysis_<lane>/temp_<t>/                 calls.jsonl, asr.csv, report.md, charts/
+    analysis/analysis_<lane>/context_check.csv         the preflight
+  The plain lane at temp_medium also writes analysis/analysis_reasoning/temp_medium/ (the
+  gpt-oss @low/@medium/@high series, same files and charts). The DOVSDOFS lane
+  draws charts/dovsdofs.pdf only; the OB lane draws charts/obfuscation.pdf only. The plain
+  lane ends with analysis/analysis_temperature/ (compare_temperatures.py: low vs medium
+  mean ASR per model, per injection and per category -- temperature.csv,
+  injection_shift.csv, report.md, charts/temperature.pdf). No significance tests anywhere:
+  read the mean ASRs side by side.
 
   Sampling, temperatures, seeds and the model set per temperature live in
   scripts/experiment.py. Every model sends its full recommended sampling; the levels are
@@ -103,36 +112,42 @@ CHECK = SCRIPTS / "check_context.py"
 BENCHMARK = SCRIPTS / "run_benchmark.py"
 SUMMARIZE = SCRIPTS / "summarize_results.py"
 CHARTS = SCRIPTS / "plot_results.py"
-CHARTS_STEM = "trick_rate_by_category"
+CHARTS_SENTINEL = "asr_by_model.pdf"
+COMPARE = SCRIPTS / "compare_temperatures.py"
+COMPARE_SENTINEL = "temperature.pdf"
 
 DEFAULT_INJECTIONS = "jailbreaks/injections.jsonl"
 CORPORA = {
-    "plain": {"attack_dir": "attack_logs",
-              "injected": "attack_logs_injected",
-              "results": "results",
-              "analysis": "analysis",
+    "plain": {"attack_dir": "attack_logs/attack_logs_plaintext",
+              "injected": "attack_logs_injected/attack_logs_injected_plaintext",
+              "results": "results/results_plaintext",
+              "analysis": "analysis/analysis_plaintext",
+              "reasoning": "analysis/analysis_reasoning",
+              "compare": "analysis/analysis_temperature",
               "injections": DEFAULT_INJECTIONS},
-    "hexa": {"attack_dir": "attack_logs_hexa",
-             "injected": "attack_logs_injected_hexa",
-             "results": "results_hexa",
-             "analysis": "analysis_hexa",
+    "hexa": {"attack_dir": "attack_logs/attack_logs_hexa",
+             "injected": "attack_logs_injected/attack_logs_injected_hexa",
+             "results": "results/results_hexa",
+             "analysis": "analysis/analysis_hexa",
              "injections": DEFAULT_INJECTIONS},
-    "dovsdofs": {"attack_dir": "attack_logs",
-                 "injected": "attack_logs_injected_dovsdofs",
-                 "results": "results_dovsdofs",
-                 "analysis": "analysis_dovsdofs",
+    "dovsdofs": {"attack_dir": "attack_logs/attack_logs_plaintext",
+                 "injected": "attack_logs_injected/attack_logs_injected_dovsdofs",
+                 "results": "results/results_dovsdofs",
+                 "analysis": "analysis/analysis_dovsdofs",
                  "injections": "jailbreaks/dovsdofs.jsonl",
                  "models": experiment.DOVSDOFS_MODELS,
-                 "paired": True},
-    "ob": {"attack_dir": "attack_logs",
-           "injected": "attack_logs_injected_ob",
-           "results": "results_ob",
-           "analysis": "analysis_ob",
+                 "paired": True,
+                 "chart": "dovsdofs.pdf"},
+    "ob": {"attack_dir": "attack_logs/attack_logs_plaintext",
+           "injected": "attack_logs_injected/attack_logs_injected_ob",
+           "results": "results/results_ob",
+           "analysis": "analysis/analysis_ob",
            "injections": "jailbreaks/ob.jsonl",
-           "models": experiment.OB_MODELS},
+           "models": experiment.OB_MODELS,
+           "by_injection": True,
+           "chart": "obfuscation.pdf"},
 }
 LANES = ("plain", "hexa", "dovsdofs", "ob")
-COMPARE_LANES = ("plain", "hexa")
 
 LANE_TEMPERATURES = {
     "plain": experiment.TEMPERATURE_LEVELS,
@@ -261,7 +276,38 @@ def run_lane(lane: str, args, temperatures: list[str]) -> int:
         rc = run_temperature(lane, temp, work[temp], tag)
         if rc != 0:
             return rc
-    return 0
+    return run_compare(lane, tag) if paths.get("compare") else 0
+
+
+def run_compare(lane: str, tag: str) -> int:
+    paths = CORPORA[lane]
+    out = Path(paths["compare"])
+    folders = [experiment.temp_dir(paths["analysis"], t) for t in experiment.TEMPERATURE_LEVELS]
+    sources = [f / "calls.jsonl" for f in folders]
+    test = out / "temperature.csv"
+    name = f"{tag}STEP 5  compare temperatures"
+    missing = [s for s in sources if not s.is_file()]
+    if missing:
+        skipped(name, f"no {missing[0]}")
+        return 0
+    if (out / "report.md").is_file() and mtime(test) > max(mtime(s) for s in sources):
+        skipped(name, f"{test} is up to date")
+    else:
+        rc = run_step(name, COMPARE, ["--analysis-root", paths["analysis"],
+                                      "--out-dir", str(out)])
+        if rc != 0:
+            print(f"\ncompare step failed (exit {rc}).")
+            return rc
+
+    name = f"{tag}STEP 5b plot temperature charts"
+    chart = out / "charts" / COMPARE_SENTINEL
+    if mtime(chart) > mtime(test):
+        skipped(name, f"{chart} is up to date")
+        return 0
+    rc = run_step(name, CHARTS, ["--analysis-dir", str(out), "--compare-temperatures"])
+    if rc != 0:
+        print(f"\nchart step failed (exit {rc}).")
+    return rc
 
 
 def run_temperature(lane: str, temp: str, work: dict, tag: str) -> int:
@@ -269,8 +315,11 @@ def run_temperature(lane: str, temp: str, work: dict, tag: str) -> int:
     tag = f"{tag}[temp_{temp}] "
     results = experiment.temp_dir(paths["results"], temp)
     analysis = experiment.temp_dir(paths["analysis"], temp)
-    verdicts = analysis / "verdicts.csv"
+    calls = analysis / "calls.jsonl"
     paired = ["--paired"] if paths.get("paired") else []
+    reasoning = (["--reasoning-out-dir", paths["reasoning"]] if paths.get("reasoning")
+                 else [])
+    plot_mode = paired or (["--by-injection"] if paths.get("by_injection") else [])
 
     if not work["total"]:
         skipped(f"{tag}STEP 2  run benchmark", "nothing matches the filters")
@@ -286,63 +335,38 @@ def run_temperature(lane: str, temp: str, work: dict, tag: str) -> int:
     if not results.is_dir():
         skipped(f"{tag}STEP 3  summarize results", f"no {results}/ yet")
     elif ((analysis / "report.md").is_file()
-          and mtime(verdicts) > max(newest(results, ("*.txt", "*.meta.json")),
-                                    mtime(paths["injections"]))):
-        skipped(f"{tag}STEP 3  summarize results", f"{verdicts} is up to date")
+          and mtime(calls) > max(newest(results, ("*.txt", "*.meta.json")),
+                                 mtime(paths["injections"]))):
+        skipped(f"{tag}STEP 3  summarize results", f"{calls} is up to date")
     else:
         rc = run_step(f"{tag}STEP 3  summarize results", SUMMARIZE,
                       ["--results-root", paths["results"],
                        "--out-dir", paths["analysis"], "--lane", lane,
-                       "--injections", paths["injections"], "--temperature", temp] + paired)
+                       "--injections", paths["injections"], "--temperature", temp]
+                      + paired + reasoning)
         if rc != 0:
             print(f"\nsummary step failed (exit {rc}).")
             return rc
 
-    chart = analysis / "charts" / ("dovsdofs.png" if paired else f"{CHARTS_STEM}.png")
-    if not verdicts.is_file():
-        skipped(f"{tag}STEP 4  plot charts", f"no {verdicts}")
-    elif mtime(chart) > mtime(verdicts):
-        skipped(f"{tag}STEP 4  plot charts", f"{chart} is up to date")
-    else:
-        rc = run_step(f"{tag}STEP 4  plot charts", CHARTS,
-                      ["--analysis-dir", str(analysis)] + paired)
-        if rc != 0:
-            print(f"\nchart step failed (exit {rc}).")
-            return rc
-
-    return 0
-
-
-def run_compare(temperatures: list[str]) -> int:
-    for temp in temperatures:
-        name = f"[temp_{temp}] STEP 5  cross-lane comparison"
-
-        absent = [lane for lane in COMPARE_LANES if temp not in LANE_TEMPERATURES[lane]]
-        if absent:
-            skipped(name, f"{' and '.join(absent)} does not run at {temp}")
-            continue
-
-        analysis = {lane: experiment.temp_dir(CORPORA[lane]["analysis"], temp)
-                    for lane in COMPARE_LANES}
-        have = [lane for lane in COMPARE_LANES if (analysis[lane] / "verdicts.csv").is_file()]
-        if len(have) < 2:
-            missing = [lane for lane in COMPARE_LANES if lane not in have]
-            skipped(name, f"need both lanes with a verdicts.csv, run "
-                          f"python main.py --{missing[0]} first")
-            continue
-
-        baseline, others = have[0], have[1:]
-        chart = analysis[baseline] / "charts" / f"{'_vs_'.join(have)}.png"
-        if mtime(chart) > max(mtime(analysis[lane] / "verdicts.csv") for lane in have):
+    folders = [analysis]
+    if paths.get("reasoning"):
+        extra = experiment.temp_dir(paths["reasoning"], temp)
+        if (extra / "calls.jsonl").is_file():
+            folders.append(extra)
+    for folder in folders:
+        folder_calls = folder / "calls.jsonl"
+        name = f"{tag}STEP 4  plot charts" + ("" if folder == analysis else f" ({folder})")
+        chart = folder / "charts" / paths.get("chart", CHARTS_SENTINEL)
+        if not folder_calls.is_file():
+            skipped(name, f"no {folder_calls}")
+        elif mtime(chart) > mtime(folder_calls):
             skipped(name, f"{chart} is up to date")
-            continue
+        else:
+            rc = run_step(name, CHARTS, ["--analysis-dir", str(folder)] + plot_mode)
+            if rc != 0:
+                print(f"\nchart step failed (exit {rc}).")
+                return rc
 
-        rc = run_step(f"{name} ({' vs '.join(have)})", CHARTS,
-                      ["--analysis-dir", str(analysis[baseline]),
-                       "--compare", *[str(analysis[lane]) for lane in others],
-                       "--lane-labels", *have])
-        if rc != 0:
-            return rc
     return 0
 
 
@@ -353,9 +377,9 @@ def main() -> int:
                     "chart. Stages whose output is already up to date are skipped.")
     run = ap.add_argument_group("what to run (none given = all of them)")
     run.add_argument("--plain", action="store_true",
-                     help="the plain lane (attack_logs/)")
+                     help="the plain lane (attack_logs/attack_logs_plaintext/)")
     run.add_argument("--hexa", action="store_true",
-                     help="the hex lane (attack_logs_hexa/, every injection site hexed), "
+                     help="the hex lane (attack_logs/attack_logs_hexa/, every injection site hexed), "
                           "level low only")
     run.add_argument("--dovsdofs", action="store_true",
                      help="the DOVSDOFS lane (direct override without vs with a SYSTEM: "
@@ -396,22 +420,9 @@ def main() -> int:
                     or list(experiment.TEMPERATURE_LEVELS))
 
     for lane in lanes:
-        if lane in COMPARE_LANES:
-            rc = run_lane(lane, args, temperatures)
-            if rc != 0:
-                return rc
-
-    if set(lanes) & set(COMPARE_LANES):
-        rc = run_compare(temperatures)
+        rc = run_lane(lane, args, temperatures)
         if rc != 0:
-            print(f"\ncomparison step failed (exit {rc}).")
             return rc
-
-    for lane in lanes:
-        if lane not in COMPARE_LANES:
-            rc = run_lane(lane, args, temperatures)
-            if rc != 0:
-                return rc
 
     print("\ndone.")
     return 0

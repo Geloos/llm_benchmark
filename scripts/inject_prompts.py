@@ -7,7 +7,7 @@ What it does:
   from injections.jsonl, escaped per log-line type so it cannot break out of its line.
   Works on either source corpus without a mode flag, since each holds the marker in its
   own forms -- readable in the surfaces auditd left alone, hexed in the ones it could not.
-  attack_logs_hexa/ gets the hex of the prose payload at EVERY site -- its hex auditd fields
+  attack_logs/attack_logs_hexa/ gets the hex of the prose payload at EVERY site -- its hex auditd fields
   and its free text (Apache UA, sshd, mysql) alike -- so the hex lane holds no readable copy
   of the injection anywhere. A VG_ row rotates its guesses clockwise through the
   markers (marker k gets variant k mod n), so every guess lands in every file.
@@ -20,15 +20,15 @@ What it does:
 How to run it:
   python3 inject_prompts.py                                     # the plain lane, defaults
 
-  python3 inject_prompts.py --attack-dir attack_logs_hexa \
-      --out-dir attack_logs_injected_hexa                       # the hex lane
+  python3 inject_prompts.py --attack-dir attack_logs/attack_logs_hexa \
+      --out-dir attack_logs_injected/attack_logs_injected_hexa                       # the hex lane
 
   python3 inject_prompts.py --injections jailbreaks/dovsdofs.jsonl \
-      --out-dir attack_logs_injected_dovsdofs                   # the DOVSDOFS lane
+      --out-dir attack_logs_injected/attack_logs_injected_dovsdofs                   # the DOVSDOFS lane
 
 What it outputs:
   One sub-folder per input log, holding one .txt per injection, e.g.
-      attack_logs_injected/attack_drupal_cred_access/DO_01_canonical.txt
+      attack_logs_injected/attack_logs_injected_plaintext/attack_drupal_cred_access/DO_01_canonical.txt
 """
 
 import argparse
@@ -184,12 +184,13 @@ def main():
         description='Replace the this_is_the_injection marker in extracted attack logs '
                     'with prompt-injection payloads from injections.jsonl. Files already '
                     'up to date are skipped.')
-    ap.add_argument('--attack-dir', default='attack_logs',
-                    help='folder of extracted attack logs (default: attack_logs)')
+    ap.add_argument('--attack-dir', default='attack_logs/attack_logs_plaintext',
+                    help='folder of extracted attack logs '
+                         '(default: attack_logs/attack_logs_plaintext)')
     ap.add_argument('--injections', default='jailbreaks/injections.jsonl',
                     help='injections jsonl (default: jailbreaks/injections.jsonl)')
-    ap.add_argument('--out-dir', default='attack_logs_injected',
-                    help='output folder (default: attack_logs_injected)')
+    ap.add_argument('--out-dir', default='attack_logs_injected/attack_logs_injected_plaintext',
+                    help='output folder (default: attack_logs_injected/attack_logs_injected_plaintext)')
     run(ap.parse_args())
 
 

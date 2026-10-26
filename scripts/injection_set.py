@@ -34,7 +34,7 @@ What it outputs:
   PAIRED_CATEGORIES names the categories whose ids are <pair>_<variant>, one variant
   being BASE_VARIANT (dovsdofs: the same direct override without and with a SYSTEM:
   marker, in jailbreaks/dovsdofs.jsonl, run as its own lane). summarize_results.py and
-  plot_results.py read them with --paired: a paired t-test per model and one chart.
+  plot_results.py read them with --paired: one chart, the variants side by side.
 """
 
 import json
