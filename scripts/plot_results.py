@@ -21,6 +21,13 @@ What it does:
   - top injections: one chart with a panel per model, each that model's TOP_N (5)
     strongest injections ranked by trick rate (ties broken by the smaller std, then the
     id), and the same panel again as one chart per model.
+  - overlap: do the same things fool two models? A panel per pair of models, a row for
+    every log (and "all logs" on top): a stacked bar of the share of that row's (log,
+    injection) cells that fool both models (grey), only A (A's hue), only B (B's hue);
+    the rest fool neither. The number at the end is the overlap, both / (both + only
+    either). The cells, the filter (no VG_, no SPT_ but SPT_01_direct) and the TK_
+    matching are summarize's overlap.csv (experiment.overlap_calls / overlap); between
+    gpt-oss reasoning levels every injection is kept. Not drawn with a single model.
   A folder holding more than one gpt-oss level next to other models charts gpt-oss@low only
   (experiment.temperature_series). A folder holding only gpt-oss levels (analysis/analysis_reasoning/)
   charts all of them, @low / @medium / @high, in that order; gpt-oss@low keeps the hue it
@@ -51,6 +58,7 @@ What it outputs (charts only; every number is in asr.csv):
   <analysis-dir>/charts/by_category/<category>.pdf    one per category, a group per injection
   <analysis-dir>/charts/top_injections.pdf            a panel per model, its top injections
   <analysis-dir>/charts/top_injections/<model>.pdf    the same panel, one PDF per model
+  <analysis-dir>/charts/overlap.pdf                   a panel per model pair, a row per log
   <analysis-dir>/report.md                            gains a "## Charts" section linking every
                                                       chart, rewritten in place on every run
   Charts are large vector PDFs (sharp at any zoom; fonts embedded as TrueType), each with
@@ -67,6 +75,7 @@ Needs matplotlib -- the one dependency in this repo outside requests, and only h
 
 import argparse
 import csv
+import itertools
 import json
 import logging
 import os
@@ -110,6 +119,9 @@ TOP_STEM = "top_injections"
 TOP_TITLE = "Strongest injections per model"
 TOP_MODEL_TITLE = "Strongest injections"
 TOP_N = 5
+OVERLAP_STEM = "overlap"
+OVERLAP_TITLE = "Do the same cells fool both models?"
+ALL_LOGS = "all logs"
 REASONING_HUE = {"high": SERIES[0]}
 TEMPERATURE_STEM = "temperature"
 TEMPERATURE_TITLE = "ASR at temperature low vs medium"
@@ -366,6 +378,60 @@ def render_top(stats, top, color_of, title: str, out_path: Path) -> Path:
     return finish_figure(plt, fig, out_path, title)
 
 
+def log_label(log: str) -> str:
+    return log[len("attack_"):] if log.startswith("attack_") else log
+
+
+def render_overlap(rows, models, color_of, out_path: Path):
+    """A panel per pair of models, a row per log (ALL_LOGS on top): stacked shares of the
+    cells fooling both / only A / only B, the overlap written at the end. None with fewer
+    than two models."""
+    from matplotlib.patches import Patch
+    from matplotlib.ticker import MaxNLocator, PercentFormatter
+
+    cells = experiment.fooled_cells(experiment.overlap_calls(rows))
+    pairs = list(itertools.combinations([m for m in models if m in cells], 2))
+    if not pairs:
+        return None
+    t = THEME
+    logs = sorted({log for c in cells.values() for log, _ in c})
+    labels = [ALL_LOGS] + logs
+    keeps = [lambda c: True] + [lambda c, log=log: c[0] == log for log in logs]
+    ys = list(range(len(labels)))
+    plt, fig, axes = start_figure((PANEL_W * len(pairs), 0.32 * len(labels) + 1.6),
+                                  out_path, 1, len(pairs))
+    for ax, (a, b) in zip(axes, pairs):
+        parts = [experiment.overlap(cells[a], cells[b], keep) for keep in keeps]
+        left = [0.0] * len(parts)
+        for key, color in (("both", t["secondary"]), ("only_a", color_of(a)),
+                           ("only_b", color_of(b))):
+            widths = [o[key] / o["cells"] if o["cells"] else 0.0 for o in parts]
+            ax.barh(ys, widths, 0.7, left=left, color=color, zorder=3)
+            left = [x + w for x, w in zip(left, widths)]
+        for y, x, o in zip(ys, left, parts):
+            if o["overlap"] is not None:
+                ax.annotate(f"{o['overlap']:.2f}", (x, y), xytext=(3, 0),
+                            textcoords="offset points", ha="left", va="center",
+                            fontsize=NOTE_SIZE, color=t["muted"])
+        ax.set_xlim(0, min(1.0, max(left, default=0.0) + HEADROOM))
+        ax.xaxis.set_major_locator(MaxNLocator(nbins=5, steps=[1, 2, 5, 10]))
+        ax.xaxis.set_major_formatter(PercentFormatter(1.0, decimals=0))
+        ax.set_xlabel("share of the (log, injection) cells", color=t["secondary"])
+        ax.set_ylim(len(labels) - 0.5, -0.5)
+        ax.set_yticks(ys)
+        ax.set_yticklabels([log_label(g) for g in labels] if ax is axes[0] else [])
+        style_axes(ax, "x")
+        ax.tick_params(axis="y", labelsize=12)
+        ax.spines["top"].set_visible(False)
+        ax.legend(handles=[Patch(color=t["secondary"], label="both"),
+                           Patch(color=color_of(a), label=f"only {a}"),
+                           Patch(color=color_of(b), label=f"only {b}")],
+                  loc="lower left", bbox_to_anchor=(0, 1.01), ncol=1, frameon=False,
+                  labelcolor=t["secondary"], handlelength=1.2, handleheight=1.2,
+                  fontsize=12)
+    return finish_figure(plt, fig, out_path, OVERLAP_TITLE)
+
+
 def embed(report_path: Path, block_fn) -> bool:
     if not report_path.is_file():
         return False
@@ -401,7 +467,7 @@ def embed_by_injection(report_path: Path, images) -> bool:
 
 
 def embed_in_report(report_path: Path, pooled: Path, overview: Path, per_category,
-                    top, reasoning: bool) -> bool:
+                    top, reasoning: bool, overlap=None) -> bool:
     def block(rel):
         lines = [
             "## Charts", "",
@@ -421,6 +487,13 @@ def embed_in_report(report_path: Path, pooled: Path, overview: Path, per_categor
         lines += ["### Strongest injections per model", "",
                   f"- [{TOP_TITLE}]({rel(image)})", "",
                   f"Each panel is also a PDF of its own in `{rel(model_dir)}/`.", ""]
+        if overlap:
+            lines += ["### How the models differ", "",
+                      f"- [{OVERLAP_TITLE}]({rel(overlap)})", "",
+                      "A panel per pair of models, a row per log: the share of its (log, "
+                      "injection) cells fooling both (grey), only A, only B; the number "
+                      "is the overlap. The counts are in `overlap.csv` and the section "
+                      "above.", ""]
         return lines
     return embed(report_path, block)
 
@@ -668,6 +741,10 @@ def run_default(analysis_dir: Path, rows, out_dir: Path) -> None:
         written.append(render_top(injection_stats, {model: ranked[model]}, color_of,
                                   TOP_MODEL_TITLE, model_dir / f"{model}{EXT}"))
 
+    overlap = render_overlap(rows, panels, color_of, out_dir / f"{OVERLAP_STEM}{EXT}")
+    if overlap:
+        written.append(overlap)
+
     if unknown:
         print(f"WARNING: skipped {unknown} rows with an unknown category or verdict "
               f"(stale results whose injection id is not in the injections jsonl?)")
@@ -680,7 +757,7 @@ def run_default(analysis_dir: Path, rows, out_dir: Path) -> None:
               f"trick rate {best[1]:.0%}")
 
     if embed_in_report(analysis_dir / "report.md", pooled, overview, per_category,
-                       (image, model_dir), reasoning):
+                       (image, model_dir), reasoning, overlap):
         print(f"embedded the charts in {analysis_dir / 'report.md'}")
     print(f"wrote {len(written)} chart(s) under {out_dir}")
 
