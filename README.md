@@ -15,8 +15,7 @@ python main.py                 # every experiment, every temperature
 python main.py --help          # all the flags
 ```
 
-Ollama must be running with the three models pulled. Finished stages are skipped, so
-re-running `python main.py` only does what is missing. To redo a stage, delete its output.
+Ollama must be running with the three models pulled. 
 
 Run only part of it:
 
@@ -47,8 +46,7 @@ Folders:
 - `jailbreaks/` — the injections
 - `attack_logs_injected/`, `results/`, `analysis/` — generated
 
-Results are the mean ASR across seeds, with a 95% interval across the seeds. There are no
-significance tests: compare the mean ASRs directly.
+Results are the mean ASR across seeds, with a 95% interval across the seeds. 
 
 ## The experiments
 
